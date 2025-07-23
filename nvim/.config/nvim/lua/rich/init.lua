@@ -1,5 +1,5 @@
 require("rich.options")
-require("rich.keymaps")
+require("rich.keymaps.global")
 require("rich.lazy")
 require("nvim-treesitter.configs").setup({
     ensure_installed = {
