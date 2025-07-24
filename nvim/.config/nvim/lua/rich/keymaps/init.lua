@@ -1,5 +1,5 @@
 
--- Load global/editor keybindings
+--Load global/editor keybindings
 require("rich.keymaps.global")
 
 -- Load Telescope bindings

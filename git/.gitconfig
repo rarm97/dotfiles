@@ -8,7 +8,7 @@
 	trustExitCode = true
 [user]
 	name = Richard Armstrong
-	email = richarmstrong97@gmail.com
+	email = rarm97@pm.me 
 [commit]
 	template = /Users/richardarmstrong/.stCommitMsg
 [filter "lfs"]
