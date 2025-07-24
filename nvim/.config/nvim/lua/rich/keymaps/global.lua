@@ -30,12 +30,6 @@ keymap("n", "j", "jzz", opts)
 -- move up   then centre view
 keymap("n", "k", "kzz", opts)    
 
--- Window nav
-keymap("n", "<C-h>", "<C-w>h", opts)
-keymap("n", "<C-l>", "<C-w>l", opts)
-keymap("n", "<C-j>", "<C-w>j", opts)
-keymap("n", "<C-k>", "<C-w>k", opts)
-
 -- Visual mode indentation keeps selection
 keymap("v", "<", "<gv", opts)
 keymap("v", ">", ">gv", opts)
