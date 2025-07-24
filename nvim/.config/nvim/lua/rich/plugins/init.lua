@@ -29,11 +29,14 @@ vim.api.nvim_create_autocmd("InsertLeave", {
 
 -- collect plugin modules
 require("lazy").setup({
-  require("rich.plugins.lazy"),        -- lazy.nvim core settings
+  require("rich.plugins.lazy"), -- lazy.nvim core settings
   require("rich.plugins.telescope"),   -- fuzzy finder
   require("rich.plugins.nvim-tree"),   -- file explorer
   require("rich.plugins.treesitter"),  -- syntax highlighting
   require("rich.plugins.fugitive"),    -- git wrapper
   require("rich.plugins.tokyonight"),   -- display handler
   require("rich.plugins.lualine"),
-})
+  require("rich.plugins.harpoon"),
+    require("rich.plugins.lsp"),
+    require("rich.plugins.diagnostics"),
+}) 
