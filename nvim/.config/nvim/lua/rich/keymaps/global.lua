@@ -39,3 +39,6 @@ keymap("v", ">", ">gv", opts)
 
 -- Fast escape
 keymap("i", "jk", "<Esc>", opts)
+
+-- Git Fugative
+vim.keymap.set("n", "<leader>gs", ":Git<CR>", { desc = "Fugitive: Git Status" })
