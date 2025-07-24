@@ -5,6 +5,9 @@ vim.g.maplocalleader = " "
 local keymap = vim.keymap.set
 local opts = { noremap = true, silent = true }
 
+-- Nvim tree toggle bind. 
+keymap("n", "<leader>e", ":NvimTreeToggle<CR>", opts)
+
 -- Normal mode
 -- Save current file
 keymap("n", "<leader>w", ":w<CR>", opts)

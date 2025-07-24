@@ -3,6 +3,7 @@ return {
   dependencies = { "nvim-tree/nvim-web-devicons" },
   config = function()
     require("nvim-tree").setup({
+      on_attach = require("rich.keymaps.nvim-tree").attach,
       view = {
         width = 30,
         relativenumber = true,
