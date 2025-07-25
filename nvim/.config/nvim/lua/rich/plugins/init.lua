@@ -11,10 +11,6 @@ if not vim.loop.fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
-
-vim.opt.number = true
-vim.opt.relativenumber = true
-
 vim.api.nvim_create_autocmd("InsertEnter", {
   callback = function()
     vim.opt.relativenumber = false

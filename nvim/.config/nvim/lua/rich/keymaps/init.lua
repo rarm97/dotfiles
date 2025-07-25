@@ -1,9 +1,6 @@
 --Load global/editor keybindings
 require("rich.keymaps.global")
 
--- Load Harpoon bindings
-require("rich.keymaps.harpoon")
-
 -- Load lsp bindings
 require("rich.keymaps.lsp")
 

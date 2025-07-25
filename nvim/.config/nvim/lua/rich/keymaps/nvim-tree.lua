@@ -15,6 +15,9 @@ function M.attach(bufnr)
   local ok, api = pcall(require, "nvim-tree.api")
   if not ok then return end
 
+-- Nvim tree toggle bind. 
+vim.keymap.set("n", "<leader>e", ":NvimTreeToggle<CR>", opts)
+
   api.config.mappings.default_on_attach(bufnr)
 
   map("<C-[>", api.tree.change_root_to_parent, "Up one directory", bufnr)

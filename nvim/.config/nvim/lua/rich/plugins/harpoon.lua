@@ -1,20 +1,29 @@
 return {
   "ThePrimeagen/harpoon",
   branch = "harpoon2",
+  lazy = false,
   config = function()
+    print("Harpoon config loaded!")
     local harpoon = require("harpoon")
-
+    vim.keymap.set("n", "<leader>za", function() print("It works!") end)
     harpoon:setup()
 
-    local keymap = vim.keymap.set
+    local list = harpoon:list()
     local opts = { noremap = true, silent = true }
 
-    keymap("n", "<leader>a", function() harpoon:list():add() end, vim.tbl_extend("force", opts, { desc = "Harpoon: Add file" }))
-    keymap("n", "<C-e>", function() harpoon.ui:toggle_quick_menu(harpoon:list()) end, vim.tbl_extend("force", opts, { desc = "Harpoon: Quick menu" }))
+    -- Add current file to Harpoon
+    vim.keymap.set("n", "<leader>ha", function() list:add() end, vim.tbl_extend("force", opts, { desc = "Harpoon: Add file" }))
 
-    keymap("n", "<leader>1", function() harpoon:list():select(1) end, { desc = "Harpoon: Go to file 1" })
-    keymap("n", "<leader>2", function() harpoon:list():select(2) end, { desc = "Harpoon: Go to file 2" })
-    keymap("n", "<leader>3", function() harpoon:list():select(3) end, { desc = "Harpoon: Go to file 3" })
-    keymap("n", "<leader>4", function() harpoon:list():select(4) end, { desc = "Harpoon: Go to file 4" })
+    -- Remove current file from Harpoon
+    vim.keymap.set("n", "<leader>hr", function() list:remove() end, vim.tbl_extend("force", opts, { desc = "Harpoon: Remove file" }))
+
+    -- Toggle Harpoon menu (Primeagen now does this via :Harpoon)
+    vim.keymap.set("n", "<C-h>", function() harpoon.ui:toggle_quick_menu(list) end, vim.tbl_extend("force", opts, { desc = "Harpoon: Quick Menu" }))
+
+    -- Navigate to Harpoon files
+    vim.keymap.set("n", "<leader>1", function() list:select(1) end, { desc = "Harpoon: Go to file 1" })
+    vim.keymap.set("n", "<leader>2", function() list:select(2) end, { desc = "Harpoon: Go to file 2" })
+    vim.keymap.set("n", "<leader>3", function() list:select(3) end, { desc = "Harpoon: Go to file 3" })
+    vim.keymap.set("n", "<leader>4", function() list:select(4) end, { desc = "Harpoon: Go to file 4" })
   end,
 }
