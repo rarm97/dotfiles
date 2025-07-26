@@ -1,14 +1,15 @@
+    print("lsp.lua set up run")
 return {
+
   "neovim/nvim-lspconfig",
   dependencies = {
-    { "williamboman/mason.nvim", build = ":MasonUpdate" },
+    { "williamboman/mason.nvim" },
     "williamboman/mason-lspconfig.nvim",
   },
   config = function()
     local lspconfig = require("lspconfig")
     local mason = require("mason")
     local mason_lspconfig = require("mason-lspconfig")
-
     -- Enable mason and ensure essential servers are installed
     mason.setup()
     mason_lspconfig.setup({
@@ -33,7 +34,6 @@ return {
         })
       end
 
-      -- Primeagen-inspired LSP mappings
       map("n", "gd", vim.lsp.buf.definition, "[LSP] Go to definition")
       map("n", "K", vim.lsp.buf.hover, "[LSP] Hover documentation")
       map("n", "<leader>rn", vim.lsp.buf.rename, "[LSP] Rename symbol")
@@ -44,14 +44,12 @@ return {
       map("n", "gr", vim.lsp.buf.references, "[LSP] References")
     end
 
-    -- Customize diagnostic signs
     local signs = { Error = " ", Warn = " ", Hint = "󰌶", Info = " " }
     for type, icon in pairs(signs) do
       local hl = "DiagnosticSign" .. type
       vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = "" })
     end
 
-    -- Configure each LSP server
     mason_lspconfig.setup_handlers({
       function(server_name)
         lspconfig[server_name].setup({

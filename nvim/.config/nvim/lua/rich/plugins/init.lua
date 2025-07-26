@@ -11,20 +11,11 @@ if not vim.loop.fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
-vim.api.nvim_create_autocmd("InsertEnter", {
-  callback = function()
-    vim.opt.relativenumber = false
-  end,
-})
-
-vim.api.nvim_create_autocmd("InsertLeave", {
-  callback = function()
-    vim.opt.relativenumber = true
-  end,
-})
-
 -- collect plugin modules
 require("lazy").setup({
+  { "williamboman/mason-lspconfig.nvim" },
+  { "neovim/nvim-lspconfig" },
+  require("rich.plugins.mason"),
   require("rich.plugins.lazy"), -- lazy.nvim core settings
   require("rich.plugins.telescope"),   -- fuzzy finder
   require("rich.plugins.nvim-tree"),   -- file explorer

@@ -1,4 +1,4 @@
-
+    print("treesitter config run")
 return {
   "nvim-treesitter/nvim-treesitter",
   build = ":TSUpdate",

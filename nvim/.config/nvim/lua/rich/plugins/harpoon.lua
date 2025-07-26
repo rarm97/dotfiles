@@ -1,9 +1,9 @@
+    print("Harpoon setup exec")
 return {
   "ThePrimeagen/harpoon",
   branch = "harpoon2",
   lazy = false,
   config = function()
-    print("Harpoon config loaded!")
     local harpoon = require("harpoon")
     vim.keymap.set("n", "<leader>za", function() print("It works!") end)
     harpoon:setup()

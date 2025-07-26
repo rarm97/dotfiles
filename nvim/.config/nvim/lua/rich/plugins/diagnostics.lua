@@ -1,6 +1,7 @@
+    print("Diagnositics.lua setup run")
 return {
-  "neovim/nvim-lspconfig",
-  config = function()
+    "neovim/nvim-lspconfig",
+    config = function()
     vim.diagnostic.config({
       virtual_text = {
         spacing = 4,
@@ -11,5 +12,5 @@ return {
       update_in_insert = false,
       severity_sort = true,
     })
-  end,
+end,
 }
