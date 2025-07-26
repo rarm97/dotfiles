@@ -1,29 +1,25 @@
-    print("lsp.lua set up run")
 return {
-
   "neovim/nvim-lspconfig",
   dependencies = {
-    { "williamboman/mason.nvim" },
+    "williamboman/mason.nvim",
     "williamboman/mason-lspconfig.nvim",
   },
   config = function()
+        print("===Entered LSP config function===")
     local lspconfig = require("lspconfig")
-    local mason = require("mason")
     local mason_lspconfig = require("mason-lspconfig")
-    -- Enable mason and ensure essential servers are installed
-    mason.setup()
+    -- No need to call mason.setup() here!
     mason_lspconfig.setup({
       ensure_installed = {
         "lua_ls",
         "pyright",
         "rust_analyzer",
-        "tsserver",
+        "ts_ls",
         "jsonls",
       },
       automatic_installation = true,
     })
-
-    -- Basic on_attach function
+    -- (rest of your code unchanged)
     local on_attach = function(_, bufnr)
       local map = function(mode, lhs, rhs, desc)
         vim.keymap.set(mode, lhs, rhs, {
@@ -33,7 +29,6 @@ return {
           desc = desc,
         })
       end
-
       map("n", "gd", vim.lsp.buf.definition, "[LSP] Go to definition")
       map("n", "K", vim.lsp.buf.hover, "[LSP] Hover documentation")
       map("n", "<leader>rn", vim.lsp.buf.rename, "[LSP] Rename symbol")
@@ -43,20 +38,21 @@ return {
       map("n", "<leader>e", vim.diagnostic.open_float, "[LSP] Show diagnostic")
       map("n", "gr", vim.lsp.buf.references, "[LSP] References")
     end
-
     local signs = { Error = " ", Warn = " ", Hint = "󰌶", Info = " " }
     for type, icon in pairs(signs) do
       local hl = "DiagnosticSign" .. type
       vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = "" })
     end
-
-    mason_lspconfig.setup_handlers({
+    mason_lspconfig.setup({
+            handlers = {
       function(server_name)
+        print("Attempting to setup: ", server_name)
         lspconfig[server_name].setup({
           on_attach = on_attach,
           capabilities = vim.lsp.protocol.make_client_capabilities(),
         })
       end,
-    })
+    },
+  })
   end,
 }

@@ -13,9 +13,8 @@ vim.opt.rtp:prepend(lazypath)
 
 -- collect plugin modules
 require("lazy").setup({
-  { "williamboman/mason-lspconfig.nvim" },
-  { "neovim/nvim-lspconfig" },
   require("rich.plugins.mason"),
+    require("rich.plugins.lsp"),
   require("rich.plugins.lazy"), -- lazy.nvim core settings
   require("rich.plugins.telescope"),   -- fuzzy finder
   require("rich.plugins.nvim-tree"),   -- file explorer
@@ -24,6 +23,5 @@ require("lazy").setup({
   require("rich.plugins.tokyonight"),   -- display handler
   require("rich.plugins.lualine"),
   require("rich.plugins.harpoon"),
-    require("rich.plugins.lsp"),
-    require("rich.plugins.diagnostics"),
+--    require("rich.plugins.diagnostics"),
 }) 
