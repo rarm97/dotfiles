@@ -7,3 +7,9 @@ elif num <10:
     print("little ol number")
 else:
     print("They said it couldn't be done, it's 10!")
+
+def this_func():
+    print("This is within this function") 
+
+this_func()
+

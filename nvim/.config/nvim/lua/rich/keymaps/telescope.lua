@@ -17,3 +17,11 @@ end, { desc = "Telescope: Live Grep" })
 vim.keymap.set("n", "<leader>th", function()
   require("telescope.builtin").help_tags()
 end, { desc = "Telescope: Help Tags" })
+
+vim.keymap.set("n", "<leader>e", function()
+  require("telescope").extensions.file_browser.file_browser({
+    layout_strategy = "horizontal",
+    layout_config = { height = 0.3 },  -- 30% of the window at the bottom
+    -- optionally, path = "%:p:h", cwd = vim.fn.expand("%:p:h"),
+  })
+end, { noremap = true, silent = true, desc = "Telescope File Browser (Bottom)" })

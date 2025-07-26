@@ -40,7 +40,7 @@ lspconfig[server_name].setup({
       map("n", "<leader>ca", vim.lsp.buf.code_action, "[LSP] Code actions")
       map("n", "[d", vim.diagnostic.goto_prev, "[LSP] Previous diagnostic")
       map("n", "]d", vim.diagnostic.goto_next, "[LSP] Next diagnostic")
-      map("n", "<leader>e", vim.diagnostic.open_float, "[LSP] Show diagnostic")
+      map("n", "<leader>d", vim.diagnostic.open_float, "[LSP] Show diagnostic")
       map("n", "gr", vim.lsp.buf.references, "[LSP] References")
     end
     local signs = { Error = " ", Warn = " ", Hint = "󰌶", Info = " " }

@@ -16,7 +16,7 @@ function M.attach(bufnr)
   if not ok then return end
 
 -- Nvim tree toggle bind. 
-vim.keymap.set("n", "<leader>e", ":NvimTreeToggle<CR>", opts)
+vim.keymap.set("n", "<leader>nt", ":NvimTreeToggle<CR>", opts)
 
   api.config.mappings.default_on_attach(bufnr)
 
