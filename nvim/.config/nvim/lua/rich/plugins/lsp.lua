@@ -29,6 +29,11 @@ return {
           desc = desc,
         })
       end
+      local capabilities = require('cmp_nvim_lsp').default_capabilities()
+lspconfig[server_name].setup({
+  on_attach = on_attach,
+  capabilities = capabilities,
+})
       map("n", "gd", vim.lsp.buf.definition, "[LSP] Go to definition")
       map("n", "K", vim.lsp.buf.hover, "[LSP] Hover documentation")
       map("n", "<leader>rn", vim.lsp.buf.rename, "[LSP] Rename symbol")

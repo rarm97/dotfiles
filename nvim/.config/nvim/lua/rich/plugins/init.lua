@@ -14,7 +14,28 @@ vim.opt.rtp:prepend(lazypath)
 -- collect plugin modules
 require("lazy").setup({
   require("rich.plugins.mason"),
-    require("rich.plugins.lsp"),
+    require("rich.plugins.lsp"),-- in your plugin list
+{
+  "hrsh7th/nvim-cmp",
+  dependencies = {
+    "hrsh7th/cmp-nvim-lsp",
+    -- optional: "hrsh7th/cmp-buffer", "hrsh7th/cmp-path"
+  },
+  config = function()
+    local cmp = require("cmp")
+    cmp.setup({
+      sources = {
+        { name = "nvim_lsp" },
+        -- optional: { name = "buffer" }, { name = "path" }
+      },
+      mapping = cmp.mapping.preset.insert({
+        ['<Tab>'] = cmp.mapping.select_next_item(),
+        ['<S-Tab>'] = cmp.mapping.select_prev_item(),
+        ['<CR>'] = cmp.mapping.confirm({ select = true }),
+      }),
+    })
+  end,
+},
   require("rich.plugins.lazy"), -- lazy.nvim core settings
   require("rich.plugins.telescope"),   -- fuzzy finder
   require("rich.plugins.nvim-tree"),   -- file explorer
