@@ -3,6 +3,16 @@ local opts = { noremap = true, silent = true }
 -- Nvim tree toggle bind. 
 vim.keymap.set("n", "<leader>e", ":NvimTreeToggle<CR>", opts)
 
+-- Run the current file with python  
+vim.keymap.set("n", "<leader>rp", function()
+  vim.cmd("w")  -- save the file
+  vim.cmd("split | terminal python3 " .. vim.fn.expand("%"))
+end, { desc = "Run Python file", noremap = true, silent = true })
+    --vim.cmd("w")
+   -- vim.cmd("split | terminal python ".. vim.fn.expand("%"))
+
+--end, {desc = "Run python file", noremap = true, silent = true} )
+
 -- Normal mode
 -- Save current file
 vim.keymap.set("n", "<leader>w", ":w<CR>", opts)

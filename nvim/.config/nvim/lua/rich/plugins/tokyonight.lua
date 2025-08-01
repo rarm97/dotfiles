@@ -1,4 +1,3 @@
-    print("tokyonight setup run")
 return {
     "folke/tokyonight.nvim",
     priority = 1000, 

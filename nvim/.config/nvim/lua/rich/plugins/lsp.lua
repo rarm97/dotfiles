@@ -16,6 +16,7 @@ return {
         "rust_analyzer",
         "ts_ls",
         "jsonls",
+        "clangd", 
       },
       automatic_installation = true, -- v2+ flag
     })

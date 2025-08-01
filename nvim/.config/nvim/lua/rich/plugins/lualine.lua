@@ -1,4 +1,3 @@
-    print("lualine setup run")
 return {
   "nvim-lualine/lualine.nvim",
   event = "VeryLazy",

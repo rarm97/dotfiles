@@ -47,3 +47,4 @@ require("lazy").setup({
   require("rich.plugins.harpoon"),
 --    require("rich.plugins.diagnostics"),
 }) 
+
