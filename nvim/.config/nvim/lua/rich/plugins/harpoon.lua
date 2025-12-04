@@ -15,7 +15,7 @@ return {
     vim.keymap.set("n", "<leader>hr", function() list:remove() end, vim.tbl_extend("force", opts, { desc = "Harpoon: Remove file" }))
 
     -- Toggle Harpoon menu (Primeagen now does this via :Harpoon)
-    vim.keymap.set("n", "<C-h>", function() harpoon.ui:toggle_quick_menu(list) end, vim.tbl_extend("force", opts, { desc = "Harpoon: Quick Menu" }))
+    vim.keymap.set("n", "<leader>hh", function() harpoon.ui:toggle_quick_menu(list) end, vim.tbl_extend("force", opts, { desc = "Harpoon: Quick Menu" }))
 
     -- Navigate to Harpoon files
     vim.keymap.set("n", "<leader>1", function() list:select(1) end, { desc = "Harpoon: Go to file 1" })
