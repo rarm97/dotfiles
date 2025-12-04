@@ -1,5 +1,5 @@
 [core]
-	excludesfile = /Users/richardarmstrong/.gitignore_global
+	excludesfile = ../.gitignore_global
 [difftool "sourcetree"]
 	cmd = opendiff \"$LOCAL\" \"$REMOTE\"
 	path = 
@@ -10,7 +10,7 @@
 	name = Richard Armstrong
 	email = rarm97@pm.me 
 [commit]
-	template = /Users/richardarmstrong/.stCommitMsg
+	template = ../.stCommitMsg
 [filter "lfs"]
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f
