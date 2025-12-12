@@ -21,8 +21,7 @@ return {
       automatic_installation = true, -- v2+ flag
     })
 
-    -- Manual custom config for Lua only!
-    require("lspconfig").lua_ls.setup({
+    vim.lsp.config("lua_ls", {
       capabilities = capabilities,
       settings = {
         Lua = {
@@ -34,6 +33,22 @@ return {
         },
       },
     })
-    -- All other servers will be set up automatically by mason-lspconfig.
+
+    -- Minimal configs for other servers (you can expand later)
+    vim.lsp.config("ts_ls", { capabilities = capabilities })
+    vim.lsp.config("jsonls", { capabilities = capabilities })
+    vim.lsp.config("pyright", { capabilities = capabilities })
+    vim.lsp.config("rust_analyzer", { capabilities = capabilities })
+    vim.lsp.config("clangd", { capabilities = capabilities })
+
+    -- Enable them
+    vim.lsp.enable({
+      "lua_ls",
+      "ts_ls",
+      "jsonls",
+      "pyright",
+      "rust_analyzer",
+      "clangd",
+    })
   end,
 }
