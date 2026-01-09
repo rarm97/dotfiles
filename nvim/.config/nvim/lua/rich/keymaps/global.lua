@@ -1,17 +1,10 @@
 local opts = { noremap = true, silent = true }
 
--- Nvim tree toggle bind. 
-vim.keymap.set("n", "<leader>e", ":NvimTreeToggle<CR>", opts)
-
 -- Run the current file with python  
 vim.keymap.set("n", "<leader>rp", function()
   vim.cmd("w")  -- save the file
   vim.cmd("split | terminal python3 " .. vim.fn.expand("%"))
 end, { desc = "Run Python file", noremap = true, silent = true })
-    --vim.cmd("w")
-   -- vim.cmd("split | terminal python ".. vim.fn.expand("%"))
-
---end, {desc = "Run python file", noremap = true, silent = true} )
 
 -- Normal mode
 -- Save current file
@@ -22,17 +15,6 @@ vim.keymap.set("n", "<leader>q", function()
     local modifiable = vim.bo.modifiable
     local name = vim.fn.bufname()
     local ft = vim.bo.filetype
-
-    -- If in nvim-tree, close using its API
-    if ft == "NvimTree" then
-        local ok, api = pcall(require, "nvim-tree.api")
-        if ok then
-            api.tree.close()
-        else
-            vim.cmd("q!")
-        end
-        return
-    end
 
     -- Standard logic for other buffers
     if bt ~= "" or not modifiable or name == "" then

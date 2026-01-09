@@ -38,7 +38,6 @@ require("lazy").setup({
 },
   require("rich.plugins.toggleterm"),
   require("rich.plugins.telescope"),   -- fuzzy finder
-  require("rich.plugins.nvim-tree"),   -- file explorer
   require("rich.plugins.treesitter"),  -- syntax highlighting
   require("rich.plugins.fugitive"),    -- git wrapper
   require("rich.plugins.tokyonight"),   -- display handler
