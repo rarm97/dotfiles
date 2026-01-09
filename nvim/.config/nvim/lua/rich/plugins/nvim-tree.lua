@@ -3,6 +3,12 @@ return {
   dependencies = { "nvim-tree/nvim-web-devicons" },
   config = function()
     require("nvim-tree").setup({
+      filesystem = {
+        filtered_items = {
+            hide_dotfiles = false, 
+            hide_gitignored = false,
+        },
+      },
       on_attach = require("rich.keymaps.nvim-tree").attach,
       view = {
         width = 30,
