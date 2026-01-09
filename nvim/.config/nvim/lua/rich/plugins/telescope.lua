@@ -6,9 +6,9 @@ return {
   },
   cmd = "Telescope",
   config = function()
-    print("telescope setup run")
     require("telescope").setup({
       defaults = {
+        hidden = true, 
         layout_strategy = "horizontal",
         layout_config = { prompt_position = "top" },
         sorting_strategy = "ascending",

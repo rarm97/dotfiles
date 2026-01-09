@@ -37,7 +37,6 @@ require("lazy").setup({
   end,
 },
   require("rich.plugins.toggleterm"),
-  require("rich.plugins.lazy"), -- lazy.nvim core settings
   require("rich.plugins.telescope"),   -- fuzzy finder
   require("rich.plugins.nvim-tree"),   -- file explorer
   require("rich.plugins.treesitter"),  -- syntax highlighting
