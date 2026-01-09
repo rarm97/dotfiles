@@ -9,6 +9,13 @@ return {
     require("telescope").setup({
       defaults = {
         hidden = true, 
+        find_command = {
+          "rg",
+          "--files",
+          "--hidden",
+          "--glob",
+          "!.git/*",
+        },
         layout_strategy = "horizontal",
         layout_config = { prompt_position = "top" },
         sorting_strategy = "ascending",

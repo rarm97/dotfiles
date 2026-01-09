@@ -1,11 +1,5 @@
 local opts = { noremap = true, silent = true }
 
--- Run the current file with python  
-vim.keymap.set("n", "<leader>rp", function()
-  vim.cmd("w")  -- save the file
-  vim.cmd("split | terminal python3 " .. vim.fn.expand("%"))
-end, { desc = "Run Python file", noremap = true, silent = true })
-
 -- Normal mode
 -- Save current file
 vim.keymap.set("n", "<leader>w", ":w<CR>", opts)
@@ -24,7 +18,7 @@ vim.keymap.set("n", "<leader>q", function()
     end
 end, {desc = "Smart Quit"})
 
--- Quite current view ad delete buffer 
+-- Quit current view ad delete buffer 
 vim.keymap.set("n", "<leader>x", ":bd<CR>", opts)
 -- move down then centre view
 vim.keymap.set("n", "j", "jzz", opts)    
@@ -41,5 +35,3 @@ vim.keymap.set("i", "jk", "<Esc>", opts)
 -- Git Fugative
 vim.keymap.set("n", "<leader>gs", ":Git<CR>", { desc = "Fugitive: Git Status" })
 
--- Map leader h to nothing for harpoon usage. 
--- vim.keymap.set("n", "<leader>h", "<Nop>", opts)
