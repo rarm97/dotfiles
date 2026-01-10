@@ -4,11 +4,21 @@ return {
     "nvim-lua/plenary.nvim",
     "nvim-telescope/telescope-file-browser.nvim"
   },
-  cmd = "Telescope",
+  keys = {
+    { "<leader>ff", desc = "Find files" },
+    { "<leader>fg", desc = "Live grep" },
+    { "<leader>fb", desc = "Buffers" },
+    { "<leader>fh", desc = "Help tags" },
+    { "<leader>fe", desc = "File browser" },
+  },
+
   config = function()
-    require("telescope").setup({
+    local telescope = require("telescope")
+    local actions = require("telescope.actions")
+
+    telescope.setup({
       defaults = {
-        hidden = true, 
+        hidden = true,
         find_command = {
           "rg",
           "--files",
@@ -21,15 +31,15 @@ return {
         sorting_strategy = "ascending",
         mappings = {
           i = {
-            ["<esc>"] = require("telescope.actions").close,
-            ["<C-j>"] = "move_selection_next",
-            ["<C-k>"] = "move_selection_previous",
+            ["<esc>"] = actions.close,
+            ["<C-j>"] = actions.move_selection_next,
+            ["<C-k>"] = actions.move_selection_previous,
           },
         },
       },
       extensions = {
         file_browser = {
-          -- Optional: custom config for file_browser
+            hidden = true, 
             layout_strategy = "horizontal",
             layout_config = {height = 0.3},
         }
