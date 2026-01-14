@@ -1,7 +1,6 @@
 local ok, telescope = pcall(require, "telescope.builtin")
+
 if not ok then return end
-
-
 -- Telescope keybinds
 vim.keymap.set("n", "<leader>ff", function()
     telescope.find_files ({
