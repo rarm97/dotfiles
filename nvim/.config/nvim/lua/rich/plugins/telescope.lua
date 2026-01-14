@@ -29,6 +29,18 @@ return {
         layout_strategy = "horizontal",
         layout_config = { prompt_position = "top" },
         sorting_strategy = "ascending",
+        vimgrep_arguments = {
+          "rg",
+          "--color=never",
+          "--no-heading",
+          "--with-filename",
+          "--line-number",
+          "--column",
+          "--smart-case",
+          "--hidden",
+          "--glob",
+          "!.git/*",
+        },
         mappings = {
           i = {
             ["<esc>"] = actions.close,
