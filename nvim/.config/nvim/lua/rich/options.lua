@@ -13,7 +13,6 @@ vim.opt.hlsearch = false
 vim.opt.incsearch = true
 vim.opt.clipboard = "unnamedplus"
 
-
 vim.api.nvim_create_autocmd("InsertEnter", {
   callback = function()
     vim.opt.relativenumber = false

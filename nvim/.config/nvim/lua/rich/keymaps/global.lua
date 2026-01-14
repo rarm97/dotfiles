@@ -1,27 +1,20 @@
 local opts = { noremap = true, silent = true }
 
--- Normal mode
 -- Save current file
-vim.keymap.set("n", "<leader>w", ":w<CR>", opts)
--- Quit current view intelligently (telescope nav can be funny)
-vim.keymap.set("n", "<leader>q", function()
-    local bt = vim.bo.buftype
-    local modifiable = vim.bo.modifiable
-    local name = vim.fn.bufname()
-    local ft = vim.bo.filetype
+vim.keymap.set("n", "<leader>w", "<cmd>w<cr>", opts)
 
-    -- Standard logic for other buffers
-    if bt ~= "" or not modifiable or name == "" then
-        vim.cmd("q!")
-    else
-        vim.cmd("q")
-    end
-end, {desc = "Smart Quit"})
+-- Close current buffer (never exits Neovim)
+vim.keymap.set("n", "<leader>q", "<cmd>bd<cr>", { desc = "Close buffer" })
+
+-- Optional: hard quit Neovim (explicit)
+vim.keymap.set("n", "<leader>Q", "<cmd>qa<cr>", { desc = "Quit Neovim" })
 
 -- Quit current view ad delete buffer 
 vim.keymap.set("n", "<leader>x", ":bd<CR>", opts)
+
 -- move down then centre view
 vim.keymap.set("n", "j", "jzz", opts)    
+
 -- move up   then centre view
 vim.keymap.set("n", "k", "kzz", opts)    
 
@@ -33,5 +26,4 @@ vim.keymap.set("v", ">", ">gv", opts)
 vim.keymap.set("i", "jk", "<Esc>", opts)
 
 -- Git Fugative
-vim.keymap.set("n", "<leader>gs", ":Git<CR>", { desc = "Fugitive: Git Status" })
-
+vim.keymap.set("n", "<leader>gs", "<cmd>Git<cr>", { desc = "Fugitive: Git Status" })
