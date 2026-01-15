@@ -2,14 +2,15 @@ return {
   "nvim-telescope/telescope.nvim",
   dependencies = {
     "nvim-lua/plenary.nvim",
-    "nvim-telescope/telescope-file-browser.nvim"
+    "nvim-telescope/telescope-file-browser.nvim",
   },
+
   keys = {
-    { "<leader>ff", desc = "Find files" },
-    { "<leader>fg", desc = "Live grep" },
-    { "<leader>fb", desc = "Buffers" },
-    { "<leader>fh", desc = "Help tags" },
-    { "<leader>fe", desc = "File browser" },
+    { "<leader>ff", function() require("telescope.builtin").find_files() end, desc = "Find files" },
+    { "<leader>fg", function() require("telescope.builtin").live_grep() end,  desc = "Live grep" },
+    { "<leader>fb", function() require("telescope.builtin").buffers() end,    desc = "Buffers" },
+    { "<leader>fh", function() require("telescope.builtin").help_tags() end,  desc = "Help tags" },
+    { "<leader>fe", function() require("telescope").extensions.file_browser.file_browser() end, desc = "File browser" },
   },
 
   config = function()
@@ -18,17 +19,6 @@ return {
 
     telescope.setup({
       defaults = {
-        hidden = true,
-        find_command = {
-          "rg",
-          "--files",
-          "--hidden",
-          "--glob",
-          "!.git/*",
-        },
-        layout_strategy = "horizontal",
-        layout_config = { prompt_position = "top" },
-        sorting_strategy = "ascending",
         vimgrep_arguments = {
           "rg",
           "--color=never",
@@ -41,24 +31,41 @@ return {
           "--glob",
           "!.git/*",
         },
+
         mappings = {
           i = {
             ["<esc>"] = actions.close,
             ["<C-j>"] = actions.move_selection_next,
             ["<C-k>"] = actions.move_selection_previous,
+            ["<CR>"]  = actions.select_default,
+          },
+          n = {
+            ["<CR>"] = actions.select_default,
           },
         },
+
+        layout_strategy = "horizontal",
+        layout_config = { prompt_position = "top" },
+        sorting_strategy = "ascending",
       },
+
+      -- Put find_files override here (reliable)
+      pickers = {
+        find_files = {
+          hidden = true,
+          find_command = { "rg", "--files", "--hidden", "--glob", "!.git/*", "." },
+        },
+      },
+
       extensions = {
         file_browser = {
-            hidden = true, 
-            layout_strategy = "horizontal",
-            layout_config = {height = 0.3},
-        }
+          hidden = true,
+          layout_strategy = "horizontal",
+          layout_config = { height = 0.3 },
+        },
       },
     })
 
-    -- *** Load the file_browser extension *after* setup ***
-    require("telescope").load_extension("file_browser")
+    telescope.load_extension("file_browser")
   end,
 }
