@@ -13,7 +13,7 @@ return {
     },
 
     enable_kitty_keyboard = true, 
-    set_environmental_variables = {
+    set_environment_variables = {
         TERM = "xterm-256color",
     }, 
 
