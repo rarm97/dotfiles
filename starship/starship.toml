@@ -1,0 +1,37 @@
+# No blank line between prompts
+add_newline = false
+
+# Order and simplicity
+format = "$directory$git_branch$git_status$character"
+
+# Directory: short, readable
+[directory]
+style = "cyan"
+truncation_length = 2
+truncate_to_repo = true
+format = "[$path]($style)"
+
+# Git branch: clear, single icon
+[git_branch]
+symbol = " "
+style = "purple"
+format = " [$symbol$branch]($style)"
+
+# Git status: minimal but informative
+[git_status]
+style = "yellow"
+format = " [$all_status$ahead_behind]($style)"
+conflicted = " "
+modified = " "
+staged = " "
+untracked = " "
+deleted = "✖ "
+ahead = "⇡"
+behind = "⇣"
+diverged = "⇕"
+stashed = " "
+
+# Prompt character: traditional, no emojis
+[character]
+success_symbol = "% "
+error_symbol = "% "
