@@ -1,15 +1,20 @@
 # No blank line between prompts
-add_newline = false
-
-# Order and simplicity
-format = "$directory$git_branch$git_status$character"
+add_newline = true 
+format = "$directory$git_branch$git_status\n$character"
 
 # Directory: short, readable
 [directory]
 style = "cyan"
-truncation_length = 2
-truncate_to_repo = true
-format = "[$path]($style)"
+truncate_to_repo = false
+truncation_length = 5
+format = "[$path]($style) "
+
+[directory.substitutions]
+"~" = ""
+"code" = "󰏖"
+"Documents" = "󰈙"
+"Downloads" = "󰉍"
+".config" = ""
 
 # Git branch: clear, single icon
 [git_branch]
@@ -33,5 +38,6 @@ stashed = " "
 
 # Prompt character: traditional, no emojis
 [character]
-success_symbol = "% "
-error_symbol = "% "
+success_symbol = "❯ "
+error_symbol = "❯ "
+

@@ -1,7 +1,5 @@
-PROMPT='%n@%m %~ %# '
-
-
 export PATH="$PATH:/Users/richardarmstrong/.local/bin"
 export STATE_DIR="$HOME/state/glorious_sh"
 export EDITOR="nvim"
 export VISUAL="nvim"
+eval "$(starship init zsh)"
