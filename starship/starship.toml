@@ -1,6 +1,6 @@
 # No blank line between prompts
 add_newline = true 
-format = "$directory$git_branch$git_status\n$character"
+format = "$directory $git_branch $git_status\n$character"
 
 # Directory: short, readable
 [directory]
@@ -10,11 +10,11 @@ truncation_length = 5
 format = "[$path]($style) "
 
 [directory.substitutions]
-"~" = ""
-"code" = "󰏖"
-"Documents" = "󰈙"
-"Downloads" = "󰉍"
-".config" = ""
+"~" = " "
+"code" = "󰏖 "
+"Documents" = "󰈙 "
+"Downloads" = "󰉍 "
+".config" = " "
 
 # Git branch: clear, single icon
 [git_branch]
