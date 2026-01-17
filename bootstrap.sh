@@ -44,6 +44,7 @@ brew_install_pkgs() {
     ripgrep
     fd
     node
+    docker
   )
 
   log "Updating Homebrew"
