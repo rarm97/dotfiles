@@ -1,9 +1,9 @@
 -- ~/.wezterm.lua
 local wezterm = require 'wezterm'
-
+wezterm.log_info("Wezterm config loaded")
 return {
     -- UI Options  
-    font_size = 18.0,
+    font_size = 24.0,
     font = wezterm.font_with_fallback({
         "JetBrainsMono Nerd Font", 
         "JetBrains Mono", 
