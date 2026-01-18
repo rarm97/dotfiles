@@ -1,12 +1,18 @@
 # ~/.zshrc (interactive shells)
 [[ $- != *i* ]] && return
 
+nvm() {
+  unset -f nvm
+  [[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh"
+  nvm "$@"
+}
+node() { nvm use --silent >/dev/null 2>&1; unset -f node; command node "$@"; }
+npm()  { nvm use --silent >/dev/null 2>&1; unset -f npm;  command npm  "$@"; }
+npx()  { nvm use --silent >/dev/null 2>&1; unset -f npx;  command npx  "$@"; }
+
 # -------------------------
 # Environment / PATH
 # -------------------------
-
-# Prefer local bin first (so tools win over system defautls)
-export PATH="$HOME/.local/bin:$PATH"
 
 # Project state dir (Reliability for path variables on homelab.)
 export STATE_DIR="$HOME/state/glorious_sh"
@@ -47,3 +53,13 @@ fi
 
 # Optional per-machine overrides (not committed)
 [[ -f "$HOME/.zshrc.local" ]] && source "$HOME/.zshrc.local"
+
+# Homebrew (Apple Silicon)
+if [[ -x /opt/homebrew/bin/brew ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
+
+setopt autocd
+setopt no_beep
+setopt hist_verify
+setopt inc_append_history
