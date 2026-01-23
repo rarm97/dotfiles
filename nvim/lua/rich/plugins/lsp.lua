@@ -18,48 +18,63 @@ return {
         { "gr", vim.lsp.buf.references, desc = "References" },
         { "K", vim.lsp.buf.hover, desc = "Hover" },
     },    
-    config = function()
 
+    config = function()
         local capabilities = require("cmp_nvim_lsp").default_capabilities()
 
         require("mason-lspconfig").setup({
             ensure_installed = {
                 "lua_ls",
                 "pyright",
-                "rust_analyzer",
                 "ts_ls",
                 "jsonls",
                 "clangd",
             },
             automatic_installation = true,
         })
-    -- Neovim 0.11 native LSP configuration
-    vim.lsp.config("lua_ls", {
-      capabilities = capabilities,
-      settings = {
-        Lua = {
-          diagnostics = { globals = { "vim" } },
-          workspace = {
-            library = vim.api.nvim_get_runtime_file("", true),
-            checkThirdParty = false,
-          },
-        },
-      },
-    })
 
-    vim.lsp.config("pyright", { capabilities = capabilities })
-    vim.lsp.config("rust_analyzer", { capabilities = capabilities })
-    vim.lsp.config("ts_ls", { capabilities = capabilities })
-    vim.lsp.config("jsonls", { capabilities = capabilities })
-    vim.lsp.config("clangd", { capabilities = capabilities })
+        -- Neovim 0.11+ native LSP configuration (consistent style)
 
-    vim.lsp.enable({
-      "lua_ls",
-      "pyright",
-      "rust_analyzer",
-      "ts_ls",
-      "jsonls",
-      "clangd",
-    })
+        vim.lsp.config.lua_ls = {
+            capabilities = capabilities,
+            settings = {
+                Lua = {
+                    diagnostics = { globals = { "vim" } },
+                    workspace = {
+                        library = vim.api.nvim_get_runtime_file("", true),
+                        checkThirdParty = false,
+                    },
+                },
+            },
+        }
+
+        vim.lsp.config.pyright = { capabilities = capabilities }
+
+        -- Prefer rustup-managed rust-analyzer (on PATH)
+        vim.lsp.config.rust_analyzer = {
+            cmd = { "rust-analyzer" },
+            filetypes = { "rust" },
+            root_markers = { "Cargo.toml", "rust-project.json", ".git" },
+            capabilities = capabilities,
+            settings = {
+                ["rust-analyzer"] = {
+                    cargo = { allFeatures = true },
+                    checkOnSave = { command = "clippy" },
+                },
+            },
+        }
+
+        vim.lsp.config.ts_ls = { capabilities = capabilities }
+        vim.lsp.config.jsonls = { capabilities = capabilities }
+        vim.lsp.config.clangd = { capabilities = capabilities }
+
+        vim.lsp.enable({
+            "lua_ls",
+            "pyright",
+            "rust_analyzer",
+            "ts_ls",
+            "jsonls",
+            "clangd",
+        })
     end,
 }
