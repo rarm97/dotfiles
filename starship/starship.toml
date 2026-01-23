@@ -1,6 +1,6 @@
 # No blank line between prompts
 add_newline = true 
-format = "$directory $git_branch $git_status\n$character"
+format = "$directory $git_branch $git_status \n$character"
 
 # Directory: short, readable
 [directory]
