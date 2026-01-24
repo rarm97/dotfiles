@@ -1,4 +1,5 @@
 -- ~/.wezterm.lua
+print("WEZTERM CONFIG LOADED:", os.date())
 local wezterm = require 'wezterm'
 wezterm.log_info("Wezterm config loaded")
 return {
