@@ -1,7 +1,7 @@
 vim.opt.number = true
 vim.opt.relativenumber = true
 vim.opt.tabstop = 4
-vim.opt.shiftwidth = 4
+vim.opt.shiftwidth = 2
 vim.opt.expandtab = true
 vim.opt.smartindent = true
 vim.opt.wrap = false 
@@ -12,6 +12,7 @@ vim.opt.cursorline = true
 vim.opt.hlsearch = false
 vim.opt.incsearch = true
 vim.opt.clipboard = "unnamedplus"
+vim.opt.guicursor = ""
 
 vim.api.nvim_create_autocmd("InsertEnter", {
   callback = function()
