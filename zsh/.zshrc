@@ -15,6 +15,9 @@ npx()  { nvm use --silent >/dev/null 2>&1; unset -f npx;  command npx  "$@"; }
 # -------------------------
 
 # Add dotfiles in completion
+autoload -Uz compinit
+compinit
+
 setopt globdots
 
 # Project state dir 
