@@ -31,6 +31,9 @@ export VISUAL="nvim"
 export LANG="en_GB.UTF-8"
 export LC_ALL="en_GB.UTF-8"
 
+# Rust toolchain
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+
 # -------------------------
 # History
 # -------------------------
