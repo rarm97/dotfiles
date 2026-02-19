@@ -1,5 +1,5 @@
 # No blank line between prompts
-format = "$directory $git_branch $git_status $all\n$character"
+format = "$directory $git_branch $git_status $all"
 
 # Directory: short, readable
 [directory]

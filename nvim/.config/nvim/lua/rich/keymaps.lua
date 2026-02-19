@@ -8,9 +8,8 @@ vim.keymap.set("n", "<leader>q", "<cmd>bd<cr>", { desc = "Close buffer" })
 -- Optional: hard quit Neovim (explicit)
 vim.keymap.set("n", "<leader>Q", "<cmd>qa<cr>", { desc = "Quit Neovim" })
 
--- Visual mode indentation keeps selection
-vim.keymap.set("v", "<", "<gv", opts)
-vim.keymap.set("v", ">", ">gv", opts)
+-- Open netrw (new file browser now neo-tree has gone)
+vim.keymap.set("n", "<leader>e", "<cmd>Ex<cr>", { desc = "Open netrw" })
 
 -- Git Fugative
 vim.keymap.set("n", "<leader>gs", "<cmd>Git<cr>", { desc = "Fugitive: Git Status" })
