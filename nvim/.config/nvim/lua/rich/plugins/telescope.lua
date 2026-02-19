@@ -3,6 +3,7 @@ return {
   dependencies = {
     "nvim-lua/plenary.nvim",
   },
+
   keys = {
     { "<leader>ff", function() require("telescope.builtin").find_files() end, desc = "Find files" },
     { "<leader>fg", function() require("telescope.builtin").live_grep() end,  desc = "Live grep" },
@@ -46,23 +47,12 @@ return {
         sorting_strategy = "ascending",
       },
 
-      -- Put find_files override here (reliable)
       pickers = {
         find_files = {
           hidden = true,
           find_command = { "rg", "--files", "--hidden", "--glob", "!.git/*", "." },
         },
       },
-
-      extensions = {
-        file_browser = {
-          hidden = true,
-          layout_strategy = "horizontal",
-          layout_config = { height = 0.3 },
-        },
-      },
     })
-
-    telescope.load_extension("file_browser")
   end,
 }
