@@ -45,6 +45,7 @@ brew_install_pkgs() {
     fd
     node
     docker
+    starship
   )
 
   log "Updating Homebrew"
@@ -62,7 +63,7 @@ stow_packages() {
   log "Stowing dotfiles packages"
   cd "$DOTFILES_DIR"
 
-  local packages=(nvim wezterm tmux zsh home)
+  local packages=(nvim wezterm tmux zsh home starship)
   if [[ -d "$DOTFILES_DIR/gitconfig" ]]; then
     packages+=(gitconfig)
   elif [[ -d "$DOTFILES_DIR/git" ]]; then

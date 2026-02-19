@@ -16,7 +16,7 @@ bootstrap:
 stow:
 	@set -euo pipefail; \
 	cd "$$(pwd)"; \
-	PKGS="nvim wezterm tmux zsh home"; \
+	PKGS="nvim wezterm tmux zsh home starship"; \
 	if [[ -d "./gitconfig" ]]; then PKGS="$$PKGS gitconfig"; \
 	elif [[ -d "./git" ]]; then PKGS="$$PKGS git"; fi; \
 	echo "==> Dry run"; \
@@ -27,7 +27,7 @@ stow:
 unstow:
 	@set -euo pipefail; \
 	cd "$$(pwd)"; \
-	PKGS="nvim wezterm tmux zsh home"; \
+	PKGS="nvim wezterm tmux zsh home starship"; \
 	if [[ -d "./gitconfig" ]]; then PKGS="$$PKGS gitconfig"; \
 	elif [[ -d "./git" ]]; then PKGS="$$PKGS git"; fi; \
 	echo "==> Unstow"; \
