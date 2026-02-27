@@ -4,3 +4,5 @@ __MACOSX/
 *.swo
 *.bak
 *.tmp
+
+**/.claude/settings.local.json
