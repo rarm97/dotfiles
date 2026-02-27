@@ -21,15 +21,13 @@ vim.opt.undodir = os.getenv("HOME") .. "/.vim/undodir"
 vim.opt.undofile = true
 
 vim.api.nvim_create_autocmd("InsertEnter", {
-  callback = function()
-    vim.wo.relativenumber = false
-  end,
+    callback = function()
+        vim.wo.relativenumber = false
+    end,
 })
 
 vim.api.nvim_create_autocmd("InsertLeave", {
-  callback = function()
-    vim.wo.relativenumber = true
-  end,
+    callback = function()
+        vim.wo.relativenumber = true
+    end,
 })
-
-
