@@ -11,7 +11,7 @@ return {
         "Menlo", 
     }), 
     
-    color_scheme = "Tokyo Night Storm",
+    color_scheme = "Rosé Pine Moon",
     enable_tab_bar = false,
     window_padding = {
         left = 4, right = 4, top = 4, bottom = 4,

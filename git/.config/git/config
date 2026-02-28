@@ -1,6 +1,6 @@
 [core]
 	excludesfile = ~/.config/git/ignore
-	editor = nvim --wait
+	editor = nvim
 [difftool "sourcetree"]
 	cmd = opendiff \"$LOCAL\" \"$REMOTE\"
 	path = 

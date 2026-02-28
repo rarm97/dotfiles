@@ -8,7 +8,6 @@ vim.g.netrw_winsize = 25
 
 require("rich.options")
 require("rich.lazy")
-require("rich.layout.colourscheme")
 require("rich.keymaps")
 
 -- Highlight on yank

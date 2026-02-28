@@ -8,6 +8,11 @@ return {
     config = function()
         local cmp = require("cmp")
         cmp.setup({
+            snippet = {
+                expand = function(args)
+                    vim.snippet.expand(args.body)
+                end,
+            },
             sources = {
                 { name = "nvim_lsp" },
                 { name = "buffer" },
@@ -17,6 +22,7 @@ return {
                 ["<C-p>"] = cmp.mapping.select_prev_item(),
                 ["<C-n>"] = cmp.mapping.select_next_item(),
                 ["<C-y>"] = cmp.mapping.confirm({ select = true }),
+                ["<CR>"] = cmp.mapping.confirm({ select = true }),
                 ["<C-Space>"] = cmp.mapping.complete(),
             }),
         })

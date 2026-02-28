@@ -11,6 +11,7 @@ fi
 # -------------------------
 # NVM lazy-loading
 # -------------------------
+export NVM_DIR="$HOME/.nvm"
 nvm() {
   unset -f nvm
   [[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh"
@@ -52,7 +53,6 @@ export LC_ALL="en_GB.UTF-8"
 HISTFILE="$HOME/.zsh_history"
 HISTSIZE=10000
 SAVEHIST=10000
-setopt appendhistory
 setopt hist_ignore_dups
 setopt hist_ignore_space
 setopt sharehistory
