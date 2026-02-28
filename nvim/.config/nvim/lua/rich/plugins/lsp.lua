@@ -13,10 +13,13 @@ return {
     { "]d", vim.diagnostic.goto_next, desc = "Next diagnostic" },
 
     { "<leader>rn", vim.lsp.buf.rename, desc = "Rename symbol" },
+    { "<leader>ca", vim.lsp.buf.code_action, desc = "Code action", mode = { "n", "v" } },
     { "gd", vim.lsp.buf.definition, desc = "Go to definition" },
+    { "gD", vim.lsp.buf.type_definition, desc = "Go to type definition" },
     { "gi", vim.lsp.buf.implementation, desc = "Go to implementation" },
     { "gr", vim.lsp.buf.references, desc = "References" },
     { "K", vim.lsp.buf.hover, desc = "Hover" },
+    { "<C-k>", vim.lsp.buf.signature_help, desc = "Signature help", mode = "i" },
   },    
 
   config = function()

@@ -22,10 +22,14 @@ npm()  { nvm use --silent >/dev/null 2>&1; unset -f npm;  command npm  "$@"; }
 npx()  { nvm use --silent >/dev/null 2>&1; unset -f npx;  command npx  "$@"; }
 
 # -------------------------
-# Completion
+# Completion (cached daily for speed)
 # -------------------------
 autoload -Uz compinit
-compinit
+if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
+  compinit
+else
+  compinit -C
+fi
 
 setopt globdots
 
@@ -33,7 +37,7 @@ setopt globdots
 # Environment
 # -------------------------
 
-# Project state dir 
+# Project state dir
 export STATE_DIR="$HOME/state/glorious_sh"
 
 # Editor
@@ -60,7 +64,7 @@ setopt hist_verify
 setopt inc_append_history
 
 # -------------------------
-# Aliases 
+# Aliases
 # -------------------------
 alias ll='ls -lah'
 alias vim='nvim'
@@ -70,6 +74,25 @@ alias vim='nvim'
 # -------------------------
 setopt autocd
 setopt no_beep
+
+# -------------------------
+# fzf shell integration (Ctrl-R history, Ctrl-T files, Alt-C cd)
+# -------------------------
+if command -v fzf >/dev/null 2>&1; then
+  eval "$(fzf --zsh)"
+fi
+
+# -------------------------
+# Zsh plugins (installed via Homebrew)
+# -------------------------
+if [[ -d /opt/homebrew/share/zsh-autosuggestions ]]; then
+  source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+fi
+
+# Syntax highlighting must be sourced last (after all widgets are defined)
+if [[ -d /opt/homebrew/share/zsh-syntax-highlighting ]]; then
+  source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+fi
 
 # -------------------------
 # Prompt (Starship) — must be last

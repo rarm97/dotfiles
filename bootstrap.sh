@@ -47,6 +47,8 @@ brew_install_pkgs() {
     docker
     starship
     fzf
+    zsh-autosuggestions
+    zsh-syntax-highlighting
   )
 
   log "Updating Homebrew"

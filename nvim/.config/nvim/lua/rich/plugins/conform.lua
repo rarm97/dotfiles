@@ -4,7 +4,7 @@ return {
     cmd = { "ConformInfo" },
     keys = {
         {
-            "<leader>f",
+            "<leader>cf",
             function()
                 require("conform").format({ async = true, lsp_format = "fallback" })
             end,
@@ -30,7 +30,7 @@ return {
             cpp = { "clang-format" },
         },
         format_on_save = {
-            timeout_ms = 5000,
+            timeout_ms = 2000,
             lsp_format = "fallback",
         },
     },

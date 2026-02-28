@@ -2,6 +2,7 @@ return {
   "nvim-telescope/telescope.nvim",
   dependencies = {
     "nvim-lua/plenary.nvim",
+    { "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
   },
 
   keys = {
@@ -9,6 +10,10 @@ return {
     { "<leader>fg", function() require("telescope.builtin").live_grep() end,  desc = "Live grep" },
     { "<leader>fb", function() require("telescope.builtin").buffers() end,    desc = "Buffers" },
     { "<leader>fh", function() require("telescope.builtin").help_tags() end,  desc = "Help tags" },
+    { "<leader>fo", function() require("telescope.builtin").oldfiles() end,   desc = "Recent files" },
+    { "<leader>fd", function() require("telescope.builtin").diagnostics() end, desc = "Diagnostics" },
+    { "<leader>fs", function() require("telescope.builtin").grep_string() end, desc = "Grep word under cursor" },
+    { "<leader>fr", function() require("telescope.builtin").resume() end,     desc = "Resume last picker" },
   },
 
   config = function()
@@ -53,6 +58,12 @@ return {
           find_command = { "rg", "--files", "--hidden", "--glob", "!.git/*", "." },
         },
       },
+
+      extensions = {
+        fzf = {},
+      },
     })
+
+    telescope.load_extension("fzf")
   end,
 }
