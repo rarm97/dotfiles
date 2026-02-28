@@ -21,8 +21,8 @@ stow:
 	elif [[ -d "./git" ]]; then PKGS="$$PKGS git"; fi; \
 	echo "==> Dry run"; \
 	stow -n -t "$$HOME" $$PKGS; \
-	echo "==> Apply"; \
-	stow -t "$$HOME" $$PKGS
+	echo "==> Apply (restow to clean dead symlinks)"; \
+	stow -R -t "$$HOME" $$PKGS
 
 unstow:
 	@set -euo pipefail; \
