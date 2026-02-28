@@ -5,3 +5,4 @@ __MACOSX/
 .bak
 .tmp
 .zip
+tmux/.config/tmux/plugins/
