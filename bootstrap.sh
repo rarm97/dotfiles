@@ -46,6 +46,7 @@ brew_install_pkgs() {
     node
     docker
     starship
+    fzf
   )
 
   log "Updating Homebrew"

@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# tmux-sessionizer — fuzzy-find a project directory and open it in a named tmux session
+# Inspired by ThePrimeagen
+
+# Ensure Homebrew tools (fzf, etc.) are on PATH when invoked from tmux popup
+if [[ -x /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
+
+# Directories to search for projects (depth 1)
+SEARCH_DIRS=(
+    ~/dotfiles
+    ~/learning
+    ~/coding_projects
+)
+
+if [[ $# -eq 1 ]]; then
+    selected=$1
+else
+    # Build list: the search dirs themselves + their immediate children
+    selected=$(
+        (
+            for d in "${SEARCH_DIRS[@]}"; do
+                [[ -d "$d" ]] && echo "$d"
+                [[ -d "$d" ]] && find "$d" -mindepth 1 -maxdepth 1 -type d
+            done
+        ) | fzf
+    )
+fi
+
+[[ -z "$selected" ]] && exit 0
+
+# Session name: basename, dots replaced with underscores (tmux dislikes dots)
+session_name=$(basename "$selected" | tr . _)
+
+# If not inside tmux, create or attach
+if [[ -z "${TMUX:-}" ]]; then
+    tmux new-session -A -s "$session_name" -c "$selected"
+else
+    # Create session in background if it doesn't exist
+    if ! tmux has-session -t="$session_name" 2>/dev/null; then
+        tmux new-session -ds "$session_name" -c "$selected"
+    fi
+    tmux switch-client -t "$session_name"
+fi
