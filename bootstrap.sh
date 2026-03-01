@@ -22,14 +22,16 @@ install_homebrew_macos() {
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
   # Ensure brew is on PATH for this script run (Apple Silicon default)
+  local brew_path=""
   if [[ -x /opt/homebrew/bin/brew ]]; then
-    eval "$(/opt/homebrew/bin/brew shellenv)"
+    brew_path="/opt/homebrew/bin/brew"
   elif [[ -x /usr/local/bin/brew ]]; then
-    eval "$(/usr/local/bin/brew shellenv)"
+    brew_path="/usr/local/bin/brew"
   else
     die "brew installed but not found in expected locations"
   fi
 
+  eval "$("$brew_path" shellenv)" || die "Failed to initialize Homebrew environment"
   log "Persisting brew shellenv into ~/.zprofile (safe, idempotent)"
   local line='eval "$(/opt/homebrew/bin/brew shellenv)"'
   grep -Fqx "$line" "$HOME/.zprofile" 2>/dev/null || echo "$line" >> "$HOME/.zprofile"
@@ -79,8 +81,8 @@ stow_packages() {
   log "Stow dry-run (no changes)"
   stow -n -t "$HOME" "${packages[@]}"
 
-  log "Stow apply"
-  stow -t "$HOME" "${packages[@]}"
+  log "Stow apply (restow to clean dead symlinks)"
+  stow -R -t "$HOME" "${packages[@]}"
 }
 
 post_checks() {

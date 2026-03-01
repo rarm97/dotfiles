@@ -1,7 +1,9 @@
+-- Autocompletion engine.
+-- Sources: LSP results first, then words from the current buffer, then file paths.
+-- Uses native Neovim snippets for expansion.
 return {
     "hrsh7th/nvim-cmp",
     dependencies = {
-        "hrsh7th/cmp-nvim-lsp",
         "hrsh7th/cmp-buffer",
         "hrsh7th/cmp-path",
     },

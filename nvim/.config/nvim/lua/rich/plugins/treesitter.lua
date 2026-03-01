@@ -1,3 +1,8 @@
+-- Treesitter: syntax-aware highlighting, indentation, and code navigation.
+-- Parsers are auto-installed on first encountering a filetype.
+-- Textobjects add motions like vaf (select a function), ]m (next method),
+-- and <leader>a to swap function arguments.
+-- Context shows the current function/class at the top of the window when scrolling.
 return {
     {
         "nvim-treesitter/nvim-treesitter",

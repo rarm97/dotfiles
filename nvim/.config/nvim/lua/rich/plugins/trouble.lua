@@ -1,3 +1,6 @@
+-- Trouble: project-wide diagnostics list (errors, warnings, etc.).
+-- Better than the default quickfix list. Toggle with <leader>tt,
+-- navigate with [t / ]t.
 return {
     "folke/trouble.nvim",
     cmd = "Trouble",

@@ -1,69 +1,72 @@
+-- Fuzzy finder for files, grep, buffers, and more.
+-- Uses ripgrep for searching (fast, respects .gitignore, searches hidden files).
+-- fzf-native extension compiles a C-based sorter for faster fuzzy matching.
 return {
-  "nvim-telescope/telescope.nvim",
-  dependencies = {
-    "nvim-lua/plenary.nvim",
-    { "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
-  },
+    "nvim-telescope/telescope.nvim",
+    dependencies = {
+        "nvim-lua/plenary.nvim",
+        { "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
+    },
 
-  keys = {
-    { "<leader>ff", function() require("telescope.builtin").find_files() end, desc = "Find files" },
-    { "<leader>fg", function() require("telescope.builtin").live_grep() end,  desc = "Live grep" },
-    { "<leader>fb", function() require("telescope.builtin").buffers() end,    desc = "Buffers" },
-    { "<leader>fh", function() require("telescope.builtin").help_tags() end,  desc = "Help tags" },
-    { "<leader>fo", function() require("telescope.builtin").oldfiles() end,   desc = "Recent files" },
-    { "<leader>fd", function() require("telescope.builtin").diagnostics() end, desc = "Diagnostics" },
-    { "<leader>fs", function() require("telescope.builtin").grep_string() end, desc = "Grep word under cursor" },
-    { "<leader>fr", function() require("telescope.builtin").resume() end,     desc = "Resume last picker" },
-  },
+    keys = {
+        { "<leader>ff", function() require("telescope.builtin").find_files() end,   desc = "Find files" },
+        { "<leader>fg", function() require("telescope.builtin").live_grep() end,    desc = "Live grep" },
+        { "<leader>fb", function() require("telescope.builtin").buffers() end,      desc = "Buffers" },
+        { "<leader>fh", function() require("telescope.builtin").help_tags() end,    desc = "Help tags" },
+        { "<leader>fo", function() require("telescope.builtin").oldfiles() end,     desc = "Recent files" },
+        { "<leader>fd", function() require("telescope.builtin").diagnostics() end,  desc = "Diagnostics" },
+        { "<leader>fs", function() require("telescope.builtin").grep_string() end,  desc = "Grep word under cursor" },
+        { "<leader>fr", function() require("telescope.builtin").resume() end,       desc = "Resume last picker" },
+    },
 
-  config = function()
-    local telescope = require("telescope")
-    local actions = require("telescope.actions")
+    config = function()
+        local telescope = require("telescope")
+        local actions = require("telescope.actions")
 
-    telescope.setup({
-      defaults = {
-        vimgrep_arguments = {
-          "rg",
-          "--color=never",
-          "--no-heading",
-          "--with-filename",
-          "--line-number",
-          "--column",
-          "--smart-case",
-          "--hidden",
-          "--glob",
-          "!.git/*",
-        },
+        telescope.setup({
+            defaults = {
+                vimgrep_arguments = {
+                    "rg",
+                    "--color=never",
+                    "--no-heading",
+                    "--with-filename",
+                    "--line-number",
+                    "--column",
+                    "--smart-case",
+                    "--hidden",
+                    "--glob",
+                    "!.git/*",
+                },
 
-        mappings = {
-          i = {
-            ["<esc>"] = actions.close,
-            ["<C-j>"] = actions.move_selection_next,
-            ["<C-k>"] = actions.move_selection_previous,
-            ["<CR>"]  = actions.select_default,
-          },
-          n = {
-            ["<CR>"] = actions.select_default,
-          },
-        },
+                mappings = {
+                    i = {
+                        ["<esc>"] = actions.close,
+                        ["<C-j>"] = actions.move_selection_next,
+                        ["<C-k>"] = actions.move_selection_previous,
+                        ["<CR>"]  = actions.select_default,
+                    },
+                    n = {
+                        ["<CR>"] = actions.select_default,
+                    },
+                },
 
-        layout_strategy = "horizontal",
-        layout_config = { prompt_position = "top" },
-        sorting_strategy = "ascending",
-      },
+                layout_strategy = "horizontal",
+                layout_config = { prompt_position = "top" },
+                sorting_strategy = "ascending",
+            },
 
-      pickers = {
-        find_files = {
-          hidden = true,
-          find_command = { "rg", "--files", "--hidden", "--glob", "!.git/*", "." },
-        },
-      },
+            pickers = {
+                find_files = {
+                    hidden = true,
+                    find_command = { "rg", "--files", "--hidden", "--glob", "!.git/*", "." },
+                },
+            },
 
-      extensions = {
-        fzf = {},
-      },
-    })
+            extensions = {
+                fzf = {},
+            },
+        })
 
-    telescope.load_extension("fzf")
-  end,
+        telescope.load_extension("fzf")
+    end,
 }

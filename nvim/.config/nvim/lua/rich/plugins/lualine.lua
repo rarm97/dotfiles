@@ -1,3 +1,6 @@
+-- Lualine: statusline showing mode, git branch, diagnostics, and file info.
+-- Uses the rose-pine theme to match the colour scheme.
+-- Minimal separators to keep it clean.
 return {
     "nvim-lualine/lualine.nvim",
     dependencies = { "nvim-tree/nvim-web-devicons" },

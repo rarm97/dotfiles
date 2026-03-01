@@ -1,3 +1,8 @@
+-- Auto-formatting on save. Falls back to LSP formatting if no dedicated
+-- formatter is configured for the filetype. Manual format: <leader>cf.
+-- Formatter defaults (indent width, etc.) come from global config files
+-- in ~/  (.prettierrc, .stylua.toml, .clang-format); project-level
+-- configs override these automatically.
 return {
     "stevearc/conform.nvim",
     event = { "BufWritePre" },

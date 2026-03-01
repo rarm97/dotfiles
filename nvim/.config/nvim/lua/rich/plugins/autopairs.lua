@@ -1,3 +1,5 @@
+-- Autopairs: auto-close brackets, quotes, and parens on insert.
+-- Integrates with nvim-cmp so confirming a completion also triggers pairing.
 return {
     "windwp/nvim-autopairs",
     event = "InsertEnter",

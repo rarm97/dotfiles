@@ -1,4 +1,5 @@
--- lua/rich/lazy.lua
+-- Bootstrap lazy.nvim (plugin manager): auto-clones on first run,
+-- then loads all plugin specs from lua/rich/plugins/*.lua.
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not vim.uv.fs_stat(lazypath) then
     vim.fn.system({
