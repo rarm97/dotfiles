@@ -39,6 +39,9 @@ return {
                 "ts_ls",
                 "jsonls",
                 "clangd",
+                "yamlls",
+                "dockerls",
+                "bashls",
             },
             automatic_installation = true,
         })
@@ -77,6 +80,19 @@ return {
         vim.lsp.config.clangd = { capabilities = capabilities }
         vim.lsp.config.gopls = { capabilities = capabilities }
 
+        -- yamlls: schema validation for docker-compose, k8s, CI configs, etc.
+        vim.lsp.config.yamlls = {
+            capabilities = capabilities,
+            settings = {
+                yaml = {
+                    schemaStore = { enable = true },
+                },
+            },
+        }
+
+        vim.lsp.config.dockerls = { capabilities = capabilities }
+        vim.lsp.config.bashls = { capabilities = capabilities }
+
         vim.lsp.enable({
             "lua_ls",
             "pyright",
@@ -85,6 +101,9 @@ return {
             "jsonls",
             "clangd",
             "gopls",
+            "yamlls",
+            "dockerls",
+            "bashls",
         })
     end,
 }
