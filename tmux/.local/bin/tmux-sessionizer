@@ -5,6 +5,8 @@
 # Ensure Homebrew tools (fzf, etc.) are on PATH when invoked from tmux popup
 if [[ -x /opt/homebrew/bin/brew ]]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [[ -x /usr/local/bin/brew ]]; then
+    eval "$(/usr/local/bin/brew shellenv)"
 fi
 
 # Directories to search for projects (depth 1)

@@ -33,7 +33,7 @@ install_homebrew_macos() {
 
   eval "$("$brew_path" shellenv)" || die "Failed to initialize Homebrew environment"
   log "Persisting brew shellenv into ~/.zprofile (safe, idempotent)"
-  local line='eval "$(/opt/homebrew/bin/brew shellenv)"'
+  local line="eval \"\$(${brew_path} shellenv)\""
   grep -Fqx "$line" "$HOME/.zprofile" 2>/dev/null || echo "$line" >> "$HOME/.zprofile"
 }
 

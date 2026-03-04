@@ -2,11 +2,16 @@
 [[ $- != *i* ]] && return
 
 # -------------------------
-# Homebrew (Apple Silicon) — must be early for PATH
+# Homebrew — must be early for PATH
 # -------------------------
 if [[ -x /opt/homebrew/bin/brew ]]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [[ -x /usr/local/bin/brew ]]; then
+  eval "$(/usr/local/bin/brew shellenv)"
 fi
+
+# Local scripts
+export PATH="$HOME/.local/bin:$PATH"
 
 # -------------------------
 # NVM lazy-loading
@@ -36,9 +41,6 @@ setopt globdots
 # -------------------------
 # Environment
 # -------------------------
-
-# Project state dir
-export STATE_DIR="$HOME/state/glorious_sh"
 
 # Editor
 export EDITOR="nvim"
@@ -85,13 +87,13 @@ fi
 # -------------------------
 # Zsh plugins (installed via Homebrew)
 # -------------------------
-if [[ -d /opt/homebrew/share/zsh-autosuggestions ]]; then
-  source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+if [[ -d "${HOMEBREW_PREFIX:-}/share/zsh-autosuggestions" ]]; then
+  source "$HOMEBREW_PREFIX/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
 fi
 
 # Syntax highlighting must be sourced last (after all widgets are defined)
-if [[ -d /opt/homebrew/share/zsh-syntax-highlighting ]]; then
-  source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+if [[ -d "${HOMEBREW_PREFIX:-}/share/zsh-syntax-highlighting" ]]; then
+  source "$HOMEBREW_PREFIX/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 fi
 
 # -------------------------

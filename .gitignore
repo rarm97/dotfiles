@@ -6,3 +6,5 @@ __MACOSX/
 .tmp
 .zip
 tmux/.config/tmux/plugins/
+tmp/
+.claude/

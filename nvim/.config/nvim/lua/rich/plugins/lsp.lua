@@ -43,18 +43,14 @@ return {
             automatic_installation = true,
         })
 
-        -- lua_ls: recognise vim global, index nvim runtime for completion
+        -- lua_ls: lazydev.nvim handles workspace library and vim globals,
+        -- so we only need root markers and checkThirdParty here
         vim.lsp.config.lua_ls = {
             capabilities = capabilities,
             root_markers = { ".luarc.json", ".luarc.jsonc", ".luacheckrc", ".stylua.toml", "stylua.toml", ".git" },
             settings = {
                 Lua = {
-                    diagnostics = { globals = { "vim" } },
-                    runtime = { version = "LuaJIT" },
-                    workspace = {
-                        library = { vim.env.VIMRUNTIME },
-                        checkThirdParty = false,
-                    },
+                    workspace = { checkThirdParty = false },
                 },
             },
         }
