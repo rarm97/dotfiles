@@ -2,12 +2,9 @@
 # tmux-sessionizer — fuzzy-find a project directory and open it in a named tmux session
 # Inspired by ThePrimeagen
 
-# Ensure Homebrew tools (fzf, etc.) are on PATH when invoked from tmux popup
-if [[ -x /opt/homebrew/bin/brew ]]; then
-    eval "$(/opt/homebrew/bin/brew shellenv)"
-elif [[ -x /usr/local/bin/brew ]]; then
-    eval "$(/usr/local/bin/brew shellenv)"
-fi
+# Use absolute paths for tools that may not be in tmux's minimal PATH
+T=/opt/homebrew/bin/tmux
+FZF=/opt/homebrew/bin/fzf
 
 # Directories to search for projects (depth 1)
 SEARCH_DIRS=(
@@ -26,7 +23,7 @@ else
                 [[ -d "$d" ]] && echo "$d"
                 [[ -d "$d" ]] && find "$d" -mindepth 1 -maxdepth 1 -type d
             done
-        ) | fzf
+        ) | "$FZF"
     )
 fi
 
@@ -37,11 +34,11 @@ session_name=$(basename "$selected" | tr . _)
 
 # If not inside tmux, create or attach
 if [[ -z "${TMUX:-}" ]]; then
-    tmux new-session -A -s "$session_name" -c "$selected"
+    "$T" new-session -A -s "$session_name" -c "$selected"
 else
     # Create session in background if it doesn't exist
-    if ! tmux has-session -t="$session_name" 2>/dev/null; then
-        tmux new-session -ds "$session_name" -c "$selected"
+    if ! "$T" has-session -t="$session_name" 2>/dev/null; then
+        "$T" new-session -ds "$session_name" -c "$selected"
     fi
-    tmux switch-client -t "$session_name"
+    "$T" switch-client -t "$session_name"
 fi
