@@ -2,7 +2,7 @@
 # Kill the current tmux session without closing WezTerm.
 # If it's the last session, creates a new one first.
 
-T=tmux
+T=/opt/homebrew/bin/tmux
 name="$($T display-message -p '#{session_name}')"
 count="$($T list-sessions 2>/dev/null | wc -l | xargs)"
 
