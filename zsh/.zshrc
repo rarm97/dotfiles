@@ -57,8 +57,8 @@ export LC_ALL="en_GB.UTF-8"
 # History
 # -------------------------
 HISTFILE="$HOME/.zsh_history"
-HISTSIZE=10000
-SAVEHIST=10000
+HISTSIZE=100000
+SAVEHIST=100000
 setopt hist_ignore_dups
 setopt hist_ignore_space
 setopt sharehistory

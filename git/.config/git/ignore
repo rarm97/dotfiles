@@ -5,4 +5,8 @@ __MACOSX/
 *.bak
 *.tmp
 
+.env
+.env.*
+.env.local
+
 **/.claude/settings.local.json

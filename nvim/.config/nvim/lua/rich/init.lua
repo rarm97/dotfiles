@@ -21,9 +21,18 @@ vim.api.nvim_create_autocmd("TextYankPost", {
     end,
 })
 
--- Strip trailing whitespace on every save
+-- Strip trailing whitespace on save (only for files without a conform formatter)
 vim.api.nvim_create_autocmd("BufWritePre", {
     group = vim.api.nvim_create_augroup("rich-trim-whitespace", { clear = true }),
     pattern = "*",
-    command = [[%s/\s\+$//e]],
+    callback = function(args)
+        local ok, conform = pcall(require, "conform")
+        if ok then
+            local formatters = conform.list_formatters(args.buf)
+            if #formatters > 0 then
+                return
+            end
+        end
+        vim.cmd([[%s/\s\+$//e]])
+    end,
 })
