@@ -1,5 +1,5 @@
 # No blank line between prompts
-format = "$directory $git_branch $git_status $all"
+format = "$directory$git_branch$git_status$python$nodejs$rust$golang$cmd_duration$line_break$character"
 
 # Directory: short, readable
 [directory]

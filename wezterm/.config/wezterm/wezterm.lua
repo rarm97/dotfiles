@@ -20,6 +20,14 @@ return {
     scrollback_lines = 10000,
     adjust_window_size_when_changing_font_size = false,
 
+    -- Opt+Arrow: send standard word-jump sequences (Esc+b / Esc+f)
+    -- Kitty keyboard protocol doesn't translate these for the shell/tmux.
+    keys = {
+        { key = "LeftArrow",  mods = "OPT", action = wezterm.action.SendString("\x1bb") },
+        { key = "RightArrow", mods = "OPT", action = wezterm.action.SendString("\x1bf") },
+        { key = "Backspace",  mods = "OPT", action = wezterm.action.SendString("\x17") },
+    },
+
     -- Auto-attach to tmux "main" session (or create it)
     default_prog = {
         "/opt/homebrew/bin/tmux", "new", "-A", "-s", "main"

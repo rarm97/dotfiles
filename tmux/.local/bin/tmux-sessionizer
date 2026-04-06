@@ -2,15 +2,13 @@
 # tmux-sessionizer — fuzzy-find a project directory and open it in a named tmux session
 # Inspired by ThePrimeagen
 
-# Use absolute paths for tools that may not be in tmux's minimal PATH
-T=/opt/homebrew/bin/tmux
-FZF=/opt/homebrew/bin/fzf
-
 # Directories to search for projects (depth 1)
 SEARCH_DIRS=(
     ~/dotfiles
     ~/learning
     ~/coding_projects
+    ~/gloryandgains
+    ~
 )
 
 if [[ $# -eq 1 ]]; then
@@ -23,7 +21,7 @@ else
                 [[ -d "$d" ]] && echo "$d"
                 [[ -d "$d" ]] && find "$d" -mindepth 1 -maxdepth 1 -type d
             done
-        ) | "$FZF"
+        ) | fzf
     )
 fi
 
@@ -34,11 +32,11 @@ session_name=$(basename "$selected" | tr . _)
 
 # If not inside tmux, create or attach
 if [[ -z "${TMUX:-}" ]]; then
-    "$T" new-session -A -s "$session_name" -c "$selected"
+    tmux new-session -A -s "$session_name" -c "$selected"
 else
     # Create session in background if it doesn't exist
-    if ! "$T" has-session -t="$session_name" 2>/dev/null; then
-        "$T" new-session -ds "$session_name" -c "$selected"
+    if ! tmux has-session -t="$session_name" 2>/dev/null; then
+        tmux new-session -ds "$session_name" -c "$selected"
     fi
-    "$T" switch-client -t "$session_name"
+    tmux switch-client -t "$session_name"
 fi

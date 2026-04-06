@@ -51,6 +51,12 @@ brew_install_pkgs() {
     fzf
     zsh-autosuggestions
     zsh-syntax-highlighting
+    prettier
+    stylua
+    black
+    shfmt
+    shellcheck
+    clang-format
   )
 
   log "Updating Homebrew"

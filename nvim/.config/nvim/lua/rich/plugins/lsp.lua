@@ -13,8 +13,8 @@ return {
 
     keys = {
         { "<leader>ld", vim.diagnostic.open_float, desc = "Line diagnostics" },
-        { "[d", vim.diagnostic.goto_prev, desc = "Prev diagnostic" },
-        { "]d", vim.diagnostic.goto_next, desc = "Next diagnostic" },
+        { "[d", function() vim.diagnostic.jump({ count = -1, float = true }) end, desc = "Prev diagnostic" },
+        { "]d", function() vim.diagnostic.jump({ count = 1, float = true }) end, desc = "Next diagnostic" },
 
         { "<leader>rn", vim.lsp.buf.rename, desc = "Rename symbol" },
         { "<leader>ca", vim.lsp.buf.code_action, desc = "Code action", mode = { "n", "v" } },
