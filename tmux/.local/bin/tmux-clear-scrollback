@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+#
+# tmux-clear-scrollback — clear the current pane's screen and scrollback.
+#
+# WHY THIS IS NOT JUST A KEYBINDING
+#   The obvious version is one line in tmux.conf:
+#
+#     bind BSpace send-keys "clear" Enter \; run-shell "sleep 0.1" \; clear-history
+#
+#   and it is quietly destructive. `send-keys` writes the literal bytes
+#   `c l e a r <CR>` into the pane's pty no matter what is reading them. Land on
+#   a pane running nvim and normal-mode `c` + `l` starts a change operation, the
+#   rest is inserted as text, and Enter splits the line — then `clear-history`
+#   wipes the scrollback, so there is no record of what just happened to the
+#   buffer. This config is nvim-heavy, so that is the likely case, not the
+#   unlucky one.
+#
+#   So: ask what is actually running in the pane first. Only a shell sitting at
+#   a prompt gets told to clear itself; anything else keeps its input to itself
+#   and only the scrollback is dropped, which is what the binding is for anyway.
+#
+#   `#{pane_current_command}` is the foreground process in the pane. For an idle
+#   shell that is the shell's own name; while a command runs it is that command.
+#   That is exactly the distinction needed here, and it also means a long-running
+#   foreground job will not have `clear` queued up behind it to run later.
+#
+# KNOWN ROUGH EDGE
+#   If the shell has a half-typed command line, `clear` is appended to it rather
+#   than replacing it: `git comm` becomes `git commclear`. Harmless in practice
+#   (it fails as an unknown command) and left alone deliberately, since sending
+#   a kill-line first would depend on the shell's keymap.
+
+set -uo pipefail
+
+# Resolve the pane once and address everything explicitly, so nothing can race
+# onto a different pane between the query and the keystrokes.
+pane="$(tmux display-message -p '#{pane_id}' 2>/dev/null)"
+[ -n "$pane" ] || exit 0
+
+cmd="$(tmux display-message -p -t "$pane" '#{pane_current_command}' 2>/dev/null)"
+
+case "$cmd" in
+  zsh | bash | sh | dash | ksh | fish)
+    # A shell at a prompt: let it clear its own screen, then drop the scrollback
+    # once the prompt has been redrawn. The sleep is why this runs synchronously
+    # from run-shell — clear-history before the redraw would leave the old screen
+    # sitting in the new scrollback.
+    tmux send-keys -t "$pane" "clear" Enter
+    sleep 0.1
+    tmux clear-history -t "$pane"
+    tmux display-message "Scrollback cleared"
+    ;;
+  *)
+    tmux clear-history -t "$pane"
+    tmux display-message "Scrollback cleared (left ${cmd:-the pane} untouched)"
+    ;;
+esac
