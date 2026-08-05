@@ -68,6 +68,10 @@
 #   @resurrect-guard-collapse-pct integer 0-100   rule 2, 0 disables (default 50)
 #   @resurrect-guard-notify       on | off        status-line notice (default on)
 #   @resurrect-guard-force        on              one-shot bypass, self-clearing
+#   @resurrect-guard-announce     on              one-shot "report either way",
+#                                                 set by the save keybindings so
+#                                                 a hand-triggered save says what
+#                                                 actually happened. Self-clearing.
 #
 # ONE WRINKLE: PANE CONTENTS
 #   With @resurrect-capture-pane-contents on, save_all() carries on past the
@@ -100,38 +104,6 @@
 
 set -uo pipefail
 
-arg="${1:-}"
-
-# The --post-save-all mode gets no candidate path, so it has to work out the
-# resurrect dir for itself. Mirror resurrect's own default (helpers.sh) and
-# allow @resurrect-dir to override it, same as resurrect does.
-if [ "$arg" = "--post-save-all" ]; then
-  resurrect_dir="$(tmux show-option -gqv '@resurrect-dir' 2>/dev/null)"
-  [ -n "$resurrect_dir" ] || resurrect_dir="${XDG_DATA_HOME:-$HOME/.local/share}/tmux/resurrect"
-  # expand a leading ~ or $HOME the way resurrect's resurrect_dir() does
-  resurrect_dir="$(printf '%s' "$resurrect_dir" | sed "s,\$HOME,$HOME,g; s,^~,$HOME,")"
-  stash="$resurrect_dir/.guard-pane-contents.tar.gz"
-  archive="$resurrect_dir/pane_contents.tar.gz"
-  if [ -f "$stash" ]; then
-    mv -f "$stash" "$archive" 2>/dev/null &&
-      printf '%s  RESTORED pane contents belonging to the protected save\n' \
-        "$(date '+%Y-%m-%dT%H:%M:%S')" >>"$resurrect_dir/guard.log" 2>/dev/null
-  fi
-  exit 0
-fi
-
-candidate="$arg"
-[ -n "$candidate" ] && [ -f "$candidate" ] || exit 0
-
-resurrect_dir="$(dirname "$candidate")"
-last="$resurrect_dir/last"
-logfile="$resurrect_dir/guard.log"
-statefile="$resurrect_dir/.guard-state"
-stash="$resurrect_dir/.guard-pane-contents.tar.gz"
-archive="$resurrect_dir/pane_contents.tar.gz"
-
-# ---------------------------------------------------------------- tmux options
-
 # Read a tmux option, falling back to a default if tmux is unreachable or the
 # option is unset. -q keeps tmux quiet about unknown options, -v gives the bare
 # value with no "option " prefix.
@@ -145,11 +117,71 @@ tmux_opt() {
   fi
 }
 
+# Where a veto leaves word for the post-save-all pass. This lives at a fixed
+# per-user path rather than in the resurrect directory on purpose: the
+# post-save-all hook is called with no arguments, so it has no way to learn
+# where the resurrect directory is. Re-deriving it would mean reimplementing
+# resurrect's resurrect_dir() — which honours @resurrect-dir, expands $HOME,
+# $HOSTNAME and ~, and falls back to a legacy ~/.tmux path — and any drift
+# there would silently break the restore. So the veto, which DOES know the
+# directory (it is the parent of the candidate file), simply writes the two
+# absolute paths down: stash on line 1, archive on line 2.
+pending_marker="${TMPDIR:-/tmp}/tmux-resurrect-guard-$(id -u).pending"
+
+arg="${1:-}"
+
+# ---------------------------------------------------------------- post-save-all
+
+if [ "$arg" = "--post-save-all" ]; then
+  # Nothing to do unless a veto earlier in this same save_all() run left word.
+  [ -f "$pending_marker" ] || exit 0
+  # One path per line, so paths containing spaces survive.
+  pending_stash="$(sed -n '1p' "$pending_marker" 2>/dev/null)"
+  pending_archive="$(sed -n '2p' "$pending_marker" 2>/dev/null)"
+  rm -f "$pending_marker" 2>/dev/null
+
+  # Disarmed since the veto ran: drop the stash rather than restoring it. An old
+  # archive put back over a newer one would be its own kind of data loss.
+  if [ "$(tmux_opt '@resurrect-guard' 'on')" = "off" ]; then
+    [ -n "$pending_stash" ] && rm -f "$pending_stash" 2>/dev/null
+    exit 0
+  fi
+
+  if [ -n "$pending_stash" ] && [ -n "$pending_archive" ] && [ -f "$pending_stash" ]; then
+    mv -f "$pending_stash" "$pending_archive" 2>/dev/null &&
+      printf '%s  RESTORED pane contents belonging to the protected save\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S')" >>"$(dirname "$pending_archive")/guard.log" 2>/dev/null
+  fi
+  exit 0
+fi
+
+# ---------------------------------------------------------------- post-save-layout
+
+# Consume the one-shot flags before ANY early exit below. Both are global tmux
+# options armed by a keybinding and cleared only here, so a path that returns
+# without clearing them leaves them armed indefinitely — long enough to wave
+# through, or annotate, some unrelated save days later.
+forced="$(tmux_opt '@resurrect-guard-force' 'off')"
+announce="$(tmux_opt '@resurrect-guard-announce' 'off')"
+[ "$forced" = "on" ] && tmux set-option -gu '@resurrect-guard-force' 2>/dev/null
+[ "$announce" = "on" ] && tmux set-option -gu '@resurrect-guard-announce' 2>/dev/null
+
+candidate="$arg"
+[ -n "$candidate" ] && [ -f "$candidate" ] || exit 0
+
+resurrect_dir="$(dirname "$candidate")"
+last="$resurrect_dir/last"
+logfile="$resurrect_dir/guard.log"
+statefile="$resurrect_dir/.guard-state"
+stash="$resurrect_dir/.guard-pane-contents.tar.gz"
+archive="$resurrect_dir/pane_contents.tar.gz"
+
+# ---------------------------------------------------------------- tmux options
+
 enabled="$(tmux_opt '@resurrect-guard' 'on')"
 min_windows="$(tmux_opt '@resurrect-guard-min-windows' '2')"
 collapse_pct="$(tmux_opt '@resurrect-guard-collapse-pct' '50')"
 notify_enabled="$(tmux_opt '@resurrect-guard-notify' 'on')"
-forced="$(tmux_opt '@resurrect-guard-force' 'off')"
 
 # Guard against a non-numeric option value wedging the arithmetic below.
 case "$min_windows" in '' | *[!0-9]*) min_windows=2 ;; esac
@@ -173,6 +205,14 @@ log() {
 notify() {
   [ "$notify_enabled" = "on" ] || return 0
   tmux display-message "resurrect guard: $*" 2>/dev/null || true
+}
+
+# Say what actually happened, but only for a save the user triggered by hand.
+# The keybinding sets @resurrect-guard-announce, which we consumed at the top;
+# continuum's timed saves never set it, so they stay silent unless vetoed.
+announce_ok() {
+  [ "$announce" = "on" ] || return 0
+  notify "saved — $1"
 }
 
 # Count "window" records. Every window in every session gets exactly one such
@@ -201,8 +241,11 @@ veto() {
   }
   # Stash the pane-contents archive that belongs to the save we are protecting.
   # save_all() rewrites it a few lines later regardless of what we do here, so
-  # the --post-save-all mode puts this copy back once that rewrite is done.
-  [ -f "$archive" ] && cp -f "$archive" "$stash" 2>/dev/null
+  # the --post-save-all pass puts this copy back once that rewrite is done. Note
+  # down both absolute paths for it, since it is called with no arguments.
+  if [ -f "$archive" ] && cp -f "$archive" "$stash" 2>/dev/null; then
+    printf '%s\n%s\n' "$stash" "$archive" >"$pending_marker" 2>/dev/null
+  fi
   log "VETO  $reason"
   notify "$reason"
 }
@@ -210,30 +253,32 @@ veto() {
 allow() {
   # Clear rule 2's memory: whatever we were suspicious about is settled now.
   rm -f "$statefile" 2>/dev/null
-  # Drop any stale stash so a later save cannot resurrect an old archive over a
+  # Drop any stale stash so a later save cannot put an old archive back over a
   # good one. Only a veto in this same save_all() run should ever restore it.
-  rm -f "$stash" 2>/dev/null
+  rm -f "$stash" "$pending_marker" 2>/dev/null
   [ -n "${1:-}" ] && log "ALLOW $1"
+  announce_ok "${cand_sessions:-?} sessions, ${cand_windows:-?} windows"
   return 0
 }
 
 # ---------------------------------------------------------------- decision
 
-# Consume the one-shot bypass FIRST, before any other early exit. If the master
-# switch happens to be off we must still clear the flag, or it would sit there
-# armed and silently wave through some unrelated save days later.
-if [ "$forced" = "on" ]; then
-  tmux set-option -gu '@resurrect-guard-force' 2>/dev/null
-fi
+# Counted once, up front, so every path below (including the messages) has them.
+cand_windows="$(count_windows "$candidate")"
+cand_sessions="$(count_sessions "$candidate")"
 
-# Master switch off — behave as if this script were not installed. The rule 2
-# hold is dropped on the way out: `last` can move freely while we are disarmed,
-# so a hold recorded against some earlier `last` is meaningless afterwards.
+# Master switch off — behave as if this script were not installed. On the way
+# out, drop both pieces of carried state: `last` can move freely while we are
+# disarmed, so a rule 2 hold recorded against some earlier `last` is meaningless
+# afterwards, and a stash left from an earlier veto must never be put back over
+# a newer archive.
 if [ "$enabled" = "off" ]; then
-  rm -f "$statefile" 2>/dev/null
+  rm -f "$statefile" "$stash" "$pending_marker" 2>/dev/null
+  announce_ok "${cand_sessions} sessions, ${cand_windows} windows (guard off)"
   exit 0
 fi
 
+# The one-shot bypass was already consumed at the top of the script.
 if [ "$forced" = "on" ]; then
   allow "forced save, guard bypassed"
   exit 0
@@ -246,8 +291,6 @@ if [ ! -e "$last" ]; then
   exit 0
 fi
 
-cand_windows="$(count_windows "$candidate")"
-cand_sessions="$(count_sessions "$candidate")"
 last_windows="$(count_windows "$last")"
 
 # `last` is itself degenerate — it is not worth protecting, and refusing to
