@@ -1,0 +1,314 @@
+#!/usr/bin/env bash
+#
+# tmux-resurrect-guard — stop a trivial tmux state from overwriting a good save.
+#
+# THE PROBLEM
+#   tmux-continuum saves on a timer. If that timer fires while tmux happens to
+#   hold a throwaway state — one bare "main" window after a restart, say — the
+#   throwaway gets written out and the `last` symlink is repointed at it. The
+#   next auto-restore then faithfully brings back the throwaway instead of your
+#   real workspace, and a couple more timer ticks bury the good saves.
+#
+# HOW THIS HOOKS IN
+#   tmux-resurrect's save_all() (plugins/tmux-resurrect/scripts/save.sh) does:
+#
+#       ... write the candidate file ...
+#       execute_hook "post-save-layout" "$candidate"        # <-- we run HERE
+#       if files_differ "$candidate" "$dir/last"; then
+#           ln -fs "$(basename "$candidate")" "$dir/last"   # repoint `last`
+#       else
+#           rm "$candidate"                                 # discard candidate
+#       fi
+#
+#   execute_hook throws our exit status away, so we cannot abort a save by
+#   returning non-zero. But we can choose which branch resurrect takes, because
+#   files_differ is nothing more than `! cmp -s`.
+#
+#   So to VETO a save we overwrite the candidate with a byte-for-byte copy of
+#   the current `last`. cmp then reports "identical", resurrect deletes the
+#   candidate itself, and `last` never moves. No plugin fork, no duplicated save
+#   logic, no leftover files.
+#
+#   To ALLOW a save we do nothing at all and let resurrect carry on.
+#
+# THE RULES  (both are counted from the candidate file, not from its byte size —
+#             byte size drifts with window titles and cwd lengths, whereas a
+#             window count is the thing you actually care about losing)
+#
+#   1. FLOOR      Fewer than @resurrect-guard-min-windows windows is never a
+#                 state worth keeping. Vetoed every time, no appeal. This is the
+#                 rule that catches the bare-"main"-session case.
+#
+#   2. COLLAPSE   A candidate holding less than @resurrect-guard-collapse-pct
+#                 percent of `last`'s windows is suspicious but not necessarily
+#                 wrong — you might genuinely have closed things down. So it is
+#                 vetoed ONCE and the state is remembered. If a later save shows
+#                 the collapse has held, it is accepted: a transient blip will
+#                 not survive two saves, a real downsizing will. That is what
+#                 keeps this rule from freezing `last` forever. See the rule 2
+#                 block near the bottom for exactly what "has held" means.
+#
+# KNOWN LIMITATION
+#   Two save_all() runs overlapping can still defeat the veto: we copy `last`
+#   over our candidate, the other run moves `last`, and resurrect's cmp then
+#   sees a difference and relinks to our stale copy. Continuum takes a lock so
+#   its own timed saves never overlap; the exposed case is a manual prefix+s
+#   landing on top of a timed save. Resurrect has the same race without this
+#   script (both runs can even pick the same filename), so nothing here makes it
+#   worse — but do not expect the guard to cover it.
+#
+#   Either rule stands down when there is nothing to protect — no `last`, a
+#   dangling `last`, or a `last` that is itself already degenerate. That way a
+#   fresh machine can always take its first save, and a directory that has
+#   already been damaged can always heal itself.
+#
+# OPTIONS  (set in tmux.conf, read live on every save)
+#   @resurrect-guard              on | off        master switch      (default on)
+#   @resurrect-guard-min-windows  integer         rule 1 floor       (default 2)
+#   @resurrect-guard-collapse-pct integer 0-100   rule 2, 0 disables (default 50)
+#   @resurrect-guard-notify       on | off        status-line notice (default on)
+#   @resurrect-guard-force        on              one-shot bypass, self-clearing
+#
+# ONE WRINKLE: PANE CONTENTS
+#   With @resurrect-capture-pane-contents on, save_all() carries on past the
+#   block above and unconditionally rewrites pane_contents.tar.gz — a single
+#   shared archive, not one file per save:
+#
+#       if capture_pane_contents_option_on; then
+#           dump_pane_contents; pane_contents_create_archive; ...
+#       fi
+#       remove_old_backups
+#       execute_hook "post-save-all"                        # <-- we run here too
+#
+#   So a veto that only protected the layout file would still let the throwaway
+#   state's scrollback overwrite the scrollback belonging to the save we just
+#   protected. To close that, a veto stashes a copy of the archive, and the
+#   post-save-all hook — which runs last, after the rewrite — puts it back.
+#
+# FILES  (all live in the resurrect dir, alongside the saves)
+#   guard.log                     one decision per line; trimmed to 200 lines
+#   .guard-state                  vetoed window count, for rule 2's second strike
+#   .guard-pane-contents.tar.gz   stashed archive; its existence is the marker
+#
+# USAGE
+#   tmux-resurrect-guard <candidate-save-file>   decide on a save (post-save-layout)
+#   tmux-resurrect-guard --post-save-all         put back a stashed archive
+#   Wired up from tmux.conf as:
+#     set -g @resurrect-hook-post-save-layout '~/.local/bin/tmux-resurrect-guard'
+#     set -g @resurrect-hook-post-save-all '~/.local/bin/tmux-resurrect-guard --post-save-all'
+#   (resurrect appends the candidate path as $1 when it calls post-save-layout)
+
+set -uo pipefail
+
+arg="${1:-}"
+
+# The --post-save-all mode gets no candidate path, so it has to work out the
+# resurrect dir for itself. Mirror resurrect's own default (helpers.sh) and
+# allow @resurrect-dir to override it, same as resurrect does.
+if [ "$arg" = "--post-save-all" ]; then
+  resurrect_dir="$(tmux show-option -gqv '@resurrect-dir' 2>/dev/null)"
+  [ -n "$resurrect_dir" ] || resurrect_dir="${XDG_DATA_HOME:-$HOME/.local/share}/tmux/resurrect"
+  # expand a leading ~ or $HOME the way resurrect's resurrect_dir() does
+  resurrect_dir="$(printf '%s' "$resurrect_dir" | sed "s,\$HOME,$HOME,g; s,^~,$HOME,")"
+  stash="$resurrect_dir/.guard-pane-contents.tar.gz"
+  archive="$resurrect_dir/pane_contents.tar.gz"
+  if [ -f "$stash" ]; then
+    mv -f "$stash" "$archive" 2>/dev/null &&
+      printf '%s  RESTORED pane contents belonging to the protected save\n' \
+        "$(date '+%Y-%m-%dT%H:%M:%S')" >>"$resurrect_dir/guard.log" 2>/dev/null
+  fi
+  exit 0
+fi
+
+candidate="$arg"
+[ -n "$candidate" ] && [ -f "$candidate" ] || exit 0
+
+resurrect_dir="$(dirname "$candidate")"
+last="$resurrect_dir/last"
+logfile="$resurrect_dir/guard.log"
+statefile="$resurrect_dir/.guard-state"
+stash="$resurrect_dir/.guard-pane-contents.tar.gz"
+archive="$resurrect_dir/pane_contents.tar.gz"
+
+# ---------------------------------------------------------------- tmux options
+
+# Read a tmux option, falling back to a default if tmux is unreachable or the
+# option is unset. -q keeps tmux quiet about unknown options, -v gives the bare
+# value with no "option " prefix.
+tmux_opt() {
+  local value
+  value="$(tmux show-option -gqv "$1" 2>/dev/null)" || value=""
+  if [ -n "$value" ]; then
+    printf '%s' "$value"
+  else
+    printf '%s' "$2"
+  fi
+}
+
+enabled="$(tmux_opt '@resurrect-guard' 'on')"
+min_windows="$(tmux_opt '@resurrect-guard-min-windows' '2')"
+collapse_pct="$(tmux_opt '@resurrect-guard-collapse-pct' '50')"
+notify_enabled="$(tmux_opt '@resurrect-guard-notify' 'on')"
+forced="$(tmux_opt '@resurrect-guard-force' 'off')"
+
+# Guard against a non-numeric option value wedging the arithmetic below.
+case "$min_windows" in '' | *[!0-9]*) min_windows=2 ;; esac
+case "$collapse_pct" in '' | *[!0-9]*) collapse_pct=50 ;; esac
+
+# ---------------------------------------------------------------- helpers
+
+log() {
+  printf '%s  %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" >>"$logfile" 2>/dev/null
+  # Keep the log from growing without bound. tail to a temp then move, because
+  # redirecting into the file we are reading would truncate it before tail runs.
+  local lines
+  lines="$(wc -l <"$logfile" 2>/dev/null | tr -d ' ')"
+  case "$lines" in '' | *[!0-9]*) return 0 ;; esac
+  if [ "$lines" -gt 200 ]; then
+    tail -n 200 "$logfile" >"$logfile.tmp" 2>/dev/null &&
+      mv -f "$logfile.tmp" "$logfile" 2>/dev/null
+  fi
+}
+
+notify() {
+  [ "$notify_enabled" = "on" ] || return 0
+  tmux display-message "resurrect guard: $*" 2>/dev/null || true
+}
+
+# Count "window" records. Every window in every session gets exactly one such
+# line, so this is the session's real size regardless of title or path lengths.
+count_windows() {
+  awk -F'\t' '$1 == "window" { n++ } END { print n + 0 }' "$1" 2>/dev/null || echo 0
+}
+
+# Count distinct session names across the window records. Field 2 is the session
+# name. The !seen[$2]++ idiom is portable to BSD awk, unlike length(array).
+count_sessions() {
+  awk -F'\t' '$1 == "window" && !seen[$2]++ { n++ } END { print n + 0 }' "$1" 2>/dev/null || echo 0
+}
+
+# VETO: make the candidate identical to `last` so resurrect's own cmp check
+# discards it. See the header for why this is the whole trick.
+veto() {
+  local reason="$1"
+  cp -f "$last" "$candidate" 2>/dev/null || {
+    # A veto we could not carry out means the clobber this script exists to
+    # prevent is about to happen. Say so out loud rather than only in a log file
+    # inside the directory that just refused a write.
+    log "VETO FAILED (could not copy last over candidate): $reason"
+    notify "VETO FAILED — could not protect 'last'"
+    return 0
+  }
+  # Stash the pane-contents archive that belongs to the save we are protecting.
+  # save_all() rewrites it a few lines later regardless of what we do here, so
+  # the --post-save-all mode puts this copy back once that rewrite is done.
+  [ -f "$archive" ] && cp -f "$archive" "$stash" 2>/dev/null
+  log "VETO  $reason"
+  notify "$reason"
+}
+
+allow() {
+  # Clear rule 2's memory: whatever we were suspicious about is settled now.
+  rm -f "$statefile" 2>/dev/null
+  # Drop any stale stash so a later save cannot resurrect an old archive over a
+  # good one. Only a veto in this same save_all() run should ever restore it.
+  rm -f "$stash" 2>/dev/null
+  [ -n "${1:-}" ] && log "ALLOW $1"
+  return 0
+}
+
+# ---------------------------------------------------------------- decision
+
+# Consume the one-shot bypass FIRST, before any other early exit. If the master
+# switch happens to be off we must still clear the flag, or it would sit there
+# armed and silently wave through some unrelated save days later.
+if [ "$forced" = "on" ]; then
+  tmux set-option -gu '@resurrect-guard-force' 2>/dev/null
+fi
+
+# Master switch off — behave as if this script were not installed. The rule 2
+# hold is dropped on the way out: `last` can move freely while we are disarmed,
+# so a hold recorded against some earlier `last` is meaningless afterwards.
+if [ "$enabled" = "off" ]; then
+  rm -f "$statefile" 2>/dev/null
+  exit 0
+fi
+
+if [ "$forced" = "on" ]; then
+  allow "forced save, guard bypassed"
+  exit 0
+fi
+
+# Nothing to protect: no `last`, or a `last` that points at a file that is gone.
+# Always let the save through, otherwise a fresh install could never start.
+if [ ! -e "$last" ]; then
+  allow "no existing 'last' to protect"
+  exit 0
+fi
+
+cand_windows="$(count_windows "$candidate")"
+cand_sessions="$(count_sessions "$candidate")"
+last_windows="$(count_windows "$last")"
+
+# `last` is itself degenerate — it is not worth protecting, and refusing to
+# replace it would wedge the directory in its broken state forever.
+if [ "$last_windows" -lt "$min_windows" ]; then
+  allow "current 'last' is degenerate ($last_windows windows), replacing it"
+  exit 0
+fi
+
+# ---- Rule 1: absolute floor -------------------------------------------------
+if [ "$cand_windows" -lt "$min_windows" ]; then
+  veto "kept $last_windows-window save, refused ${cand_sessions}-session/${cand_windows}-window state"
+  exit 0
+fi
+
+# ---- Rule 2: collapse, with a second strike ---------------------------------
+#
+# The hold is recorded in .guard-state as "<what `last` was> <window count>".
+# All three parts matter, and a hold only counts as confirmation if all three
+# checks pass:
+#
+#   same `last`   `last` only ever moves via a save we allowed, and allow()
+#                 wipes the hold — so a hold naming a different target is
+#                 left over from a disarmed period and proves nothing.
+#   recent        an hour, using the file's own mtime. A hold from a session
+#                 that ended days ago is not evidence about this one.
+#   not shrinking the candidate must be no smaller than the held count. If the
+#                 session is still losing windows it has not settled yet, so we
+#                 re-hold at the new count instead of freezing a state that is
+#                 mid-collapse. This terminates: once the size stops falling,
+#                 the next save confirms.
+if [ "$collapse_pct" -gt 0 ] &&
+  [ $((cand_windows * 100)) -lt $((last_windows * collapse_pct)) ]; then
+
+  last_id="$(readlink "$last" 2>/dev/null)"
+  [ -n "$last_id" ] || last_id="(not-a-symlink)"
+
+  held_id=""
+  held_n=""
+  if [ -f "$statefile" ]; then
+    read -r held_id held_n <"$statefile" 2>/dev/null || true
+  fi
+  case "${held_n:-}" in '' | *[!0-9]*) held_n="" ;; esac
+
+  confirmed=0
+  if [ -n "$held_n" ] &&
+    [ "$held_id" = "$last_id" ] &&
+    [ -n "$(find "$statefile" -mmin -60 2>/dev/null)" ] &&
+    [ "$cand_windows" -ge "$held_n" ]; then
+    confirmed=1
+  fi
+
+  if [ "$confirmed" -eq 1 ]; then
+    allow "collapse ${last_windows}->${cand_windows} windows confirmed by a second save"
+    exit 0
+  fi
+
+  printf '%s %s\n' "$last_id" "$cand_windows" >"$statefile" 2>/dev/null
+  veto "held collapse ${last_windows}->${cand_windows} windows; will accept if it holds"
+  exit 0
+fi
+
+allow
+exit 0

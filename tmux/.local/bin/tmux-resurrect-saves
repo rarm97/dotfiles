@@ -1,0 +1,373 @@
+#!/usr/bin/env bash
+#
+# tmux-resurrect-saves — inspect, thin out, and recover tmux-resurrect saves.
+#
+# tmux-continuum writes a save every 15 minutes, so the resurrect directory
+# fills up with near-identical files and it becomes hard to see which ones
+# actually matter. This tool answers three questions:
+#
+#   list     what is in here, how big was each session state, which is `last`
+#   prune    which of these are noise, and delete them (only when told to)
+#   promote  point `last` at a specific save, to recover from a bad one
+#
+# Everything is driven off the save file's contents, not its byte size. Each
+# window in each session contributes exactly one "window" record and each pane
+# one "pane" record, so counting records gives the real size of the state.
+# Byte size tracks that only loosely, because it also moves with window titles
+# and working-directory path lengths.
+#
+# Written for bash 3.2 (the macOS system bash), so no associative arrays.
+
+set -uo pipefail
+
+# ---------------------------------------------------------------- settings
+
+# Where resurrect keeps its saves. Matches @resurrect-dir's default; override
+# with the RESURRECT_DIR environment variable if you ever move it.
+RESURRECT_DIR="${RESURRECT_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/tmux/resurrect}"
+
+# Retention policy, in days. See `prune` below for how these compose.
+KEEP_ALL_DAYS="${KEEP_ALL_DAYS:-7}"      # keep every save this recent
+KEEP_DAILY_DAYS="${KEEP_DAILY_DAYS:-90}" # older than that, keep one per day
+
+# A save with fewer windows than this is treated as degenerate. Keep in step
+# with @resurrect-guard-min-windows in tmux.conf.
+MIN_WINDOWS="${MIN_WINDOWS:-2}"
+
+PREFIX="tmux_resurrect_"
+SUFFIX=".txt"
+
+# ---------------------------------------------------------------- helpers
+
+die() {
+  printf 'tmux-resurrect-saves: %s\n' "$*" >&2
+  exit 1
+}
+
+count_records() { # $1 = file, $2 = record type ("window" or "pane")
+  awk -F'\t' -v t="$2" '$1 == t { n++ } END { print n + 0 }' "$1" 2>/dev/null || echo 0
+}
+
+count_sessions() { # distinct session names across the window records
+  awk -F'\t' '$1 == "window" && !seen[$2]++ { n++ } END { print n + 0 }' "$1" 2>/dev/null || echo 0
+}
+
+# YYYYMMDD for N days ago. BSD date first (macOS), GNU date as the fallback.
+days_ago() {
+  date -v-"$1"d +%Y%m%d 2>/dev/null || date -d "$1 days ago" +%Y%m%d 2>/dev/null
+}
+
+# Pull the YYYYMMDDTHHMMSS stamp out of a save's filename. The stamp sorts
+# lexically in chronological order, which is why this tool never needs to stat
+# anything or do date arithmetic beyond the two cutoffs.
+stamp_of() {
+  local base
+  base="$(basename "$1")"
+  base="${base#"$PREFIX"}"
+  printf '%s' "${base%"$SUFFIX"}"
+}
+
+# Is this stamp one resurrect actually wrote? Anything else — a save you renamed
+# by hand to pin it, say — cannot be dated, and prune refuses to delete what it
+# cannot date rather than guessing.
+valid_stamp() {
+  case "$1" in
+    [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Modified in the last two minutes. save_all() builds a save with one `>` and
+# three `>>` redirections, so for a moment a real save on disk legitimately has
+# no pane records yet. Deleting it there would make save.sh recreate a truncated
+# file and then point `last` at something that cannot be restored.
+is_in_flight() {
+  [ -n "$(find "$1" -mmin -2 2>/dev/null)" ]
+}
+
+# Basename of whatever `last` resolves to, or empty if it is missing or dangling.
+last_target() {
+  local link="$RESURRECT_DIR/last"
+  [ -L "$link" ] || return 0
+  [ -e "$link" ] || return 0
+  basename "$(readlink "$link")"
+}
+
+# Every save, oldest first. Emitted on stdout, one path per line.
+all_saves() {
+  find "$RESURRECT_DIR" -maxdepth 1 -type f -name "${PREFIX}*${SUFFIX}" 2>/dev/null | sort
+}
+
+# ---------------------------------------------------------------- list
+
+cmd_list() {
+  local last_name file stamp win pane sess bytes marks
+  last_name="$(last_target)"
+
+  if [ -L "$RESURRECT_DIR/last" ] && [ ! -e "$RESURRECT_DIR/last" ]; then
+    printf "WARNING: 'last' is a dangling symlink -> %s\n\n" "$(readlink "$RESURRECT_DIR/last")"
+  elif [ -e "$RESURRECT_DIR/last" ] && [ ! -L "$RESURRECT_DIR/last" ]; then
+    printf "WARNING: 'last' is a regular file, not a symlink. Resurrect expects a symlink.\n\n"
+  elif [ -z "$last_name" ]; then
+    printf "WARNING: no 'last' symlink — auto-restore has nothing to restore.\n\n"
+  fi
+
+  printf '%-17s %5s %5s %5s %7s  %s\n' DATE SESS WIN PANE BYTES FLAGS
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    stamp="$(stamp_of "$file")"
+    sess="$(count_sessions "$file")"
+    win="$(count_records "$file" window)"
+    pane="$(count_records "$file" pane)"
+    bytes="$(wc -c <"$file" | tr -d ' ')"
+
+    marks=""
+    [ "$win" -lt "$MIN_WINDOWS" ] && marks="degenerate"
+    valid_stamp "$stamp" || marks="${marks:+$marks }pinned (never pruned)"
+    if [ -n "$last_name" ] && [ "$(basename "$file")" = "$last_name" ]; then
+      marks="${marks:+$marks }<- last"
+    fi
+
+    printf '%-17s %5s %5s %5s %7s  %s\n' "$stamp" "$sess" "$win" "$pane" "$bytes" "$marks"
+  done < <(all_saves)
+}
+
+# ---------------------------------------------------------------- prune
+#
+# Applied in this order, first match wins:
+#
+#   1. The file `last` points at is never deleted. Deleting it would leave a
+#      dangling symlink and break auto-restore outright.
+#   2. A file resurrect may still be writing is never deleted. See is_in_flight.
+#   3. A file whose name is not a resurrect timestamp is never deleted. It
+#      cannot be dated, and something you renamed by hand is something you meant
+#      to keep.
+#   4. Degenerate saves (fewer than MIN_WINDOWS windows) are deleted at any age.
+#      They are pure noise — nothing is ever recovered from them.
+#   5. Otherwise, by age:
+#        newer than KEEP_ALL_DAYS    keep all of them
+#        newer than KEEP_DAILY_DAYS  keep only the newest KEEPABLE save of each day
+#        older                       delete
+#
+# "Keepable" in tier 5 matters more than it looks. The obvious implementation is
+# "keep a save when the next save in the list is from a different day", but that
+# is wrong whenever a day's last save is degenerate: the day's final REAL save
+# gets marked superseded by a file that tier 4 then deletes, and the entire day
+# disappears. So the same-day lookahead below skips over saves that are
+# themselves being deleted.
+#
+# Nothing is deleted without --apply. The default is a dry run that prints
+# exactly what would go.
+
+cmd_prune() {
+  local apply=0
+  [ "${1:-}" = "--apply" ] && apply=1
+
+  local cutoff_all cutoff_daily
+  cutoff_all="$(days_ago "$KEEP_ALL_DAYS")"
+  cutoff_daily="$(days_ago "$KEEP_DAILY_DAYS")"
+  [ -n "$cutoff_all" ] && [ -n "$cutoff_daily" ] || die "could not compute date cutoffs"
+
+  local last_name
+  last_name="$(last_target)"
+
+  # Load the sorted list once, precomputing each file's day and window count.
+  # The same-day lookahead below reads these arrays rather than re-running awk.
+  # days[i] is empty for a file whose name is not a resurrect timestamp.
+  local files days wins
+  files=()
+  days=()
+  wins=()
+  local f stamp
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    stamp="$(stamp_of "$f")"
+    files[${#files[@]}]="$f"
+    if valid_stamp "$stamp"; then
+      days[${#days[@]}]="${stamp%%T*}"
+    else
+      days[${#days[@]}]=""
+    fi
+    wins[${#wins[@]}]="$(count_records "$f" window)"
+  done < <(all_saves)
+
+  [ "${#files[@]}" -gt 0 ] || {
+    echo "No saves found in $RESURRECT_DIR"
+    return 0
+  }
+
+  local i j n day win keep reason superseded
+  local kept=0 dropped=0 failed=0 bytes_freed=0
+  n=${#files[@]}
+
+  for ((i = 0; i < n; i++)); do
+    f="${files[$i]}"
+    day="${days[$i]}"
+    win="${wins[$i]}"
+
+    if [ -n "$last_name" ] && [ "$(basename "$f")" = "$last_name" ]; then
+      keep=1 reason="current 'last'"
+    elif is_in_flight "$f"; then
+      keep=1 reason="written moments ago, may still be in flight"
+    elif [ -z "$day" ]; then
+      keep=1 reason="name is not a resurrect timestamp, left alone"
+    elif [ "$win" -lt "$MIN_WINDOWS" ]; then
+      keep=0 reason="degenerate ($win windows)"
+    elif [ "$day" -ge "$cutoff_all" ]; then
+      keep=1 reason="within $KEEP_ALL_DAYS days"
+    elif [ "$day" -ge "$cutoff_daily" ]; then
+      # Look ahead for a later save on the same day that will SURVIVE this run.
+      # The list is sorted, so the first different day ends the search.
+      superseded=0
+      for ((j = i + 1; j < n; j++)); do
+        [ "${days[$j]}" = "$day" ] || break
+        if [ "${wins[$j]}" -ge "$MIN_WINDOWS" ]; then
+          superseded=1
+          break
+        fi
+      done
+      if [ "$superseded" -eq 1 ]; then
+        keep=0 reason="superseded later the same day"
+      else
+        keep=1 reason="last surviving save of $day"
+      fi
+    else
+      keep=0 reason="older than $KEEP_DAILY_DAYS days"
+    fi
+
+    if [ "$keep" -eq 1 ]; then
+      kept=$((kept + 1))
+      continue
+    fi
+
+    # Size has to be read before the file goes, not after.
+    local size
+    size="$(wc -c <"$f" 2>/dev/null | tr -d ' ')"
+    case "$size" in '' | *[!0-9]*) size=0 ;; esac
+
+    if [ "$apply" -eq 0 ]; then
+      dropped=$((dropped + 1))
+      bytes_freed=$((bytes_freed + size))
+      printf 'would delete  %s  (%s)\n' "$(stamp_of "$f")" "$reason"
+    elif rm -f "$f" 2>/dev/null && [ ! -e "$f" ]; then
+      dropped=$((dropped + 1))
+      bytes_freed=$((bytes_freed + size))
+      printf 'deleted  %s  (%s)\n' "$(stamp_of "$f")" "$reason"
+    else
+      failed=$((failed + 1))
+      printf 'FAILED to delete  %s  (%s)\n' "$(stamp_of "$f")" "$reason" >&2
+    fi
+  done
+
+  printf '\n%s: %d kept, %d %s, %d KB freed\n' \
+    "$([ "$apply" -eq 1 ] && echo Pruned || echo 'Dry run')" \
+    "$kept" "$dropped" \
+    "$([ "$apply" -eq 1 ] && echo deleted || echo 'to delete')" \
+    "$((bytes_freed / 1024))"
+
+  if [ "$failed" -gt 0 ]; then
+    printf '%d file(s) could not be deleted.\n' "$failed" >&2
+    return 1
+  fi
+  [ "$apply" -eq 1 ] || printf 'Re-run with --apply to actually delete.\n'
+  return 0
+}
+
+# ---------------------------------------------------------------- promote
+
+cmd_promote() {
+  local arg="${1:-}"
+  local force=0
+  [ "${2:-}" = "--force" ] && force=1
+  [ "$arg" = "--force" ] && {
+    force=1
+    arg="${2:-}"
+  }
+  [ -n "$arg" ] || die "usage: tmux-resurrect-saves promote <YYYYMMDDTHHMMSS|filename> [--force]"
+
+  # Accept a bare timestamp, a filename, or a full path — but always resolve to
+  # a file inside the resurrect dir. basename strips any path the user typed, so
+  # this cannot be pointed at something outside the directory.
+  local base target
+  base="$(basename "$arg")"
+  case "$base" in
+    "$PREFIX"*"$SUFFIX") target="$RESURRECT_DIR/$base" ;;
+    *) target="$RESURRECT_DIR/${PREFIX}${base}${SUFFIX}" ;;
+  esac
+  [ -f "$target" ] || die "no such save: $target"
+
+  local win sess
+  win="$(count_records "$target" window)"
+  sess="$(count_sessions "$target")"
+  if [ "$win" -lt "$MIN_WINDOWS" ] && [ "$force" -eq 0 ]; then
+    die "$(basename "$target") is degenerate ($win windows). Pass --force if you really mean it."
+  fi
+
+  # -n handles a symlink-to-directory, but not a REAL directory: against one,
+  # `ln -sfn x last` cheerfully creates last/x and still exits 0. Refuse instead
+  # of reporting a success that did not happen.
+  local link="$RESURRECT_DIR/last"
+  if [ -d "$link" ] && [ ! -L "$link" ]; then
+    die "'$link' is a real directory, not a symlink. Move it aside first."
+  fi
+
+  # THE FOOTGUN: `ln -sf target` with no link name creates the link in the
+  # current directory, named after the target — which, run inside the resurrect
+  # directory, overwrites the save file itself with a symlink pointing at its
+  # own name. Always give an explicit link name.
+  #
+  # And -n, not just -f: if `last` ever ends up as a symlink to a *directory*,
+  # `ln -sf x last` follows it and drops the link INSIDE that directory. -n makes
+  # ln treat the existing symlink as a plain file and replace it. Always -sfn.
+  ln -sfn "$(basename "$target")" "$link" ||
+    die "failed to update the 'last' symlink"
+
+  # Trust the filesystem over ln's exit status.
+  [ "$(last_target)" = "$(basename "$target")" ] ||
+    die "'last' did not end up pointing at $(basename "$target")"
+
+  printf "'last' now points at %s (%s sessions, %s windows)\n" \
+    "$(basename "$target")" "$sess" "$win"
+  printf 'Restore it with: prefix + Ctrl-r\n'
+  # Worth saying plainly: resurrect keeps ONE shared pane_contents.tar.gz for
+  # the whole directory, not one per save. Promoting an old save brings back its
+  # window layout, working directories and programs, but the scrollback comes
+  # from whichever save wrote the archive last.
+  printf 'Note: layout is restored from this save; pane scrollback comes from\n'
+  printf '      the shared pane_contents.tar.gz and may not match it.\n'
+}
+
+# ---------------------------------------------------------------- entry point
+
+usage() {
+  cat <<EOF
+tmux-resurrect-saves — inspect, thin out, and recover tmux-resurrect saves
+
+  list                              show every save with its session/window/pane counts
+  prune [--apply]                   apply the retention policy (dry run without --apply)
+  promote <stamp|file> [--force]    point 'last' at a specific save
+
+Retention: keep everything from the last ${KEEP_ALL_DAYS} days, then one save per day
+back to ${KEEP_DAILY_DAYS} days, dropping degenerate saves (<${MIN_WINDOWS} windows) at any age.
+Never deletes whatever 'last' points at.
+
+Directory: $RESURRECT_DIR
+Override with RESURRECT_DIR, KEEP_ALL_DAYS, KEEP_DAILY_DAYS, MIN_WINDOWS.
+EOF
+}
+
+[ -d "$RESURRECT_DIR" ] || die "resurrect directory not found: $RESURRECT_DIR"
+
+case "${1:-list}" in
+  list) cmd_list ;;
+  prune)
+    shift
+    cmd_prune "$@"
+    ;;
+  promote)
+    shift
+    cmd_promote "$@"
+    ;;
+  -h | --help | help) usage ;;
+  *) die "unknown command: $1 (try --help)" ;;
+esac
