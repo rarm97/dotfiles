@@ -10,7 +10,10 @@ return {
         "Menlo",
     }),
 
-    color_scheme = "Rosé Pine Moon",
+    -- Exact name of the bundled scheme: lowercase, hyphenated, no accent.
+    -- "Rosé Pine Moon" matches nothing and WezTerm falls back to the default
+    -- without warning, which is why this looked wrong next to nvim and tmux.
+    color_scheme = "rose-pine-moon",
     enable_tab_bar = false,             -- tmux handles windowing
     window_padding = {
         left = 4, right = 4, top = 4, bottom = 4,
