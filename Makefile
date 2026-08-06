@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help bootstrap stow unstow check doctor
+.PHONY: help bootstrap stow unstow check doctor tidy tidy-apply
 
 # `stow` creates ~/.local/bin and ~/.config first on purpose: stow folds a
 # directory into a single symlink when the target is missing and only one
@@ -15,6 +15,8 @@ help:
 	@echo "  make unstow     - unstow packages (reversible)"
 	@echo "  make check      - verify key tools + paths"
 	@echo "  make doctor     - print useful debug info (PATH, tool locations)"
+	@echo "  make tidy       - report cruft that has accumulated (deletes nothing)"
+	@echo "  make tidy-apply - actually clean up what 'tidy' reported"
 
 bootstrap:
 	@./bootstrap.sh
@@ -55,6 +57,44 @@ check:
 	ls -la "$$HOME/.config/wezterm" 2>/dev/null || echo "~/.config/wezterm: MISSING"; \
 	ls -la "$$HOME/.config/tmux" 2>/dev/null || echo "~/.config/tmux: MISSING"; \
 	ls -la "$$HOME/.config/git" 2>/dev/null || echo "~/.config/git: MISSING"
+
+# The four things that quietly pile up here. `tidy` only ever reports; every
+# deletion lives in `tidy-apply`, so running the wrong one by accident costs
+# nothing. Both are safe to run at any time, including inside tmux.
+tidy:
+	@set -uo pipefail; \
+	echo "==> tmux-resurrect saves"; \
+	if command -v tmux-resurrect-saves >/dev/null; then \
+		tmux-resurrect-saves prune | tail -3 | sed 's/^/    /'; \
+	else echo "    tmux-resurrect-saves not on PATH (run make stow)"; fi; \
+	echo; \
+	echo "==> nvim 99-plugin scratch files (tmp_dir is relative to cwd)"; \
+	found=$$(find . -maxdepth 2 -path ./.git -prune -o -name '99-*' -mtime +7 -print 2>/dev/null); \
+	if [[ -n "$$found" ]]; then echo "$$found" | sed 's/^/    stale: /'; \
+	else echo "    none older than 7 days"; fi; \
+	echo; \
+	echo "==> git branches already merged into main"; \
+	merged=$$(git branch --merged main 2>/dev/null | grep -vE '^\*|^\s*main$$' || true); \
+	if [[ -n "$$merged" ]]; then echo "$$merged" | sed 's/^/    /'; \
+	else echo "    none"; fi; \
+	echo; \
+	echo "==> uncommitted work"; \
+	if [[ -n "$$(git status --porcelain)" ]]; then git status --short | sed 's/^/    /'; \
+	else echo "    working tree clean"; fi; \
+	echo; \
+	echo "Nothing was deleted. Run 'make tidy-apply' to act on the above."
+
+tidy-apply:
+	@set -uo pipefail; \
+	echo "==> Pruning tmux-resurrect saves"; \
+	command -v tmux-resurrect-saves >/dev/null && tmux-resurrect-saves prune --apply | tail -2 | sed 's/^/    /'; \
+	echo "==> Removing 99-plugin scratch files older than 7 days"; \
+	find . -maxdepth 2 -path ./.git -prune -o -name '99-*' -mtime +7 -print -delete 2>/dev/null | sed 's/^/    removed /' || true; \
+	echo "==> Deleting branches already merged into main"; \
+	for b in $$(git branch --merged main 2>/dev/null | grep -vE '^\*|^\s*main$$' || true); do \
+		git branch -d "$$b" | sed 's/^/    /'; \
+	done; \
+	echo "Uncommitted work is left alone on purpose - review and commit it yourself."
 
 doctor:
 	@set -euo pipefail; \
