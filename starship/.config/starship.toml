@@ -1,4 +1,7 @@
-# No blank line between prompts
+# No blank line between prompts. The `format` below controls what the prompt
+# contains, not the blank line before it — that is add_newline, which defaults
+# to true, so this comment described the opposite of what was happening.
+add_newline = false
 format = "$directory$git_branch$git_status$python$nodejs$rust$golang$cmd_duration$line_break$character"
 
 # Directory: short, readable

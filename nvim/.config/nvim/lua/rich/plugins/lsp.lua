@@ -22,7 +22,12 @@ return {
         { "gD", vim.lsp.buf.type_definition, desc = "Go to type definition" },
         { "gi", vim.lsp.buf.implementation, desc = "Go to implementation" },
         { "gr", vim.lsp.buf.references, desc = "References" },
-        { "K", vim.lsp.buf.hover, desc = "Hover" },
+        -- No "K" here on purpose. Neovim 0.11 already maps K to hover, but
+        -- buffer-locally and only `if maparg('K', 'n') == ''` — so declaring K
+        -- in this table created a GLOBAL mapping that both defeated that guard
+        -- and shadowed keywordprg (:Man) in every buffer without an LSP client.
+        -- Dropping it restores :Man outside LSP buffers and lets 0.11 install
+        -- (and clean up) its own hover map on attach and detach.
         { "<C-k>", vim.lsp.buf.signature_help, desc = "Signature help", mode = "i" },
         { "<leader>lq", vim.diagnostic.setqflist, desc = "Diagnostics to quickfix" },
     },
@@ -43,7 +48,6 @@ return {
                 "dockerls",
                 "bashls",
             },
-            automatic_installation = true,
         })
 
         -- lua_ls: lazydev.nvim handles workspace library and vim globals,

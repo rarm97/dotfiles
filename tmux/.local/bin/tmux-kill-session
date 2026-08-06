@@ -1,13 +1,39 @@
 #!/usr/bin/env bash
 # Kill the current tmux session without closing WezTerm.
-# If it's the last session, creates a new one first.
+# If it's the last session, creates a new one first so the client has somewhere
+# to go and the terminal window does not disappear.
 
-name="$(tmux display-message -p '#{session_name}')"
-count="$(tmux list-sessions 2>/dev/null | wc -l | xargs)"
+set -uo pipefail
 
-if [ "$count" -le 1 ]; then
-    tmux new-session -d
+# Refuse to run outside tmux. Without this guard `tmux display-message -p` has
+# no client to report on, $name comes back empty, and the last line becomes
+# `tmux kill-session -t "="` — an empty target. Worse, when no server is running
+# at all the `new-session -d` below would start one and leave a stray detached
+# session behind, which is exactly the sort of one-window state the resurrect
+# guard then has to defend against.
+if [ -z "${TMUX:-}" ]; then
+  echo "tmux-kill-session: not inside a tmux session" >&2
+  exit 1
 fi
 
-tmux switch-client -n
+name="$(tmux display-message -p '#{session_name}' 2>/dev/null)"
+if [ -z "$name" ]; then
+  echo "tmux-kill-session: could not determine the current session" >&2
+  exit 1
+fi
+
+count="$(tmux list-sessions 2>/dev/null | wc -l | tr -d ' ')"
+case "$count" in '' | *[!0-9]*) count=0 ;; esac
+
+if [ "$count" -le 1 ]; then
+  tmux new-session -d || {
+    echo "tmux-kill-session: could not create a replacement session; not killing $name" >&2
+    exit 1
+  }
+fi
+
+# Switch away first so the client lands somewhere before its session vanishes.
+tmux switch-client -n || true
+# "=" anchors the target to an exact name, so a session called "foo" is never
+# matched by a prefix search for another one.
 tmux kill-session -t "=$name"

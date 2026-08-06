@@ -2,6 +2,12 @@ SHELL := /bin/bash
 
 .PHONY: help bootstrap stow unstow check doctor
 
+# `stow` creates ~/.local/bin and ~/.config first on purpose: stow folds a
+# directory into a single symlink when the target is missing and only one
+# package supplies it, and only the tmux package supplies .local/. Without the
+# mkdir, a fresh machine ends up with ~/.local -> ~/dotfiles/tmux/.local and
+# everything nvim and tmux-resurrect write lands inside the repo.
+
 help:
 	@echo "Targets:"
 	@echo "  make bootstrap  - install brew deps + stow dotfiles + run checks"
@@ -15,10 +21,10 @@ bootstrap:
 
 stow:
 	@set -euo pipefail; \
-	cd "$$(pwd)"; \
 	PKGS="nvim wezterm tmux zsh home starship"; \
 	if [[ -d "./gitconfig" ]]; then PKGS="$$PKGS gitconfig"; \
 	elif [[ -d "./git" ]]; then PKGS="$$PKGS git"; fi; \
+	mkdir -p "$$HOME/.local/bin" "$$HOME/.config"; \
 	echo "==> Dry run"; \
 	stow -n -t "$$HOME" $$PKGS; \
 	echo "==> Apply (restow to clean dead symlinks)"; \
@@ -26,7 +32,6 @@ stow:
 
 unstow:
 	@set -euo pipefail; \
-	cd "$$(pwd)"; \
 	PKGS="nvim wezterm tmux zsh home starship"; \
 	if [[ -d "./gitconfig" ]]; then PKGS="$$PKGS gitconfig"; \
 	elif [[ -d "./git" ]]; then PKGS="$$PKGS git"; fi; \

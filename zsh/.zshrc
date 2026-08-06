@@ -30,11 +30,23 @@ npx()  { nvm use --silent >/dev/null 2>&1; unset -f npx;  command npx  "$@"; }
 # Completion (cached daily for speed)
 # -------------------------
 autoload -Uz compinit
-if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
-  compinit
-else
-  compinit -C
-fi
+# Run in an anonymous function so `localoptions` scopes extendedglob to just
+# this test. The (#q...) glob-qualifier syntax REQUIRES extendedglob; without
+# it zsh never expands the pattern, the -n test sees a non-empty literal
+# string, and the "cached" branch below is unreachable — every shell paid for a
+# full compinit. Verified: with extendedglob off, a dump created one second ago
+# still took the rebuild branch.
+() {
+  setopt localoptions extendedglob
+  # mh-24 = modified less than 24 hours ago. Phrased this way round so the
+  # cached path is taken only when the dump provably exists AND is fresh; a
+  # missing dump falls through to a full compinit that builds it properly.
+  if [[ -n ~/.zcompdump(#qN.mh-24) ]]; then
+    compinit -C # fresh: trust it and skip the security check
+  else
+    compinit # missing or over a day old: rebuild it
+  fi
+}
 
 setopt globdots
 

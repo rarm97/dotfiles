@@ -8,5 +8,17 @@ __MACOSX/
 .env
 .env.*
 .env.local
+# ...but not the checked-in templates. `.env.*` above matches these too, and
+# silently ignoring the example file is how a repo ends up with no documented
+# environment at all.
+!.env.example
+!.env.sample
+!.env.template
+!.env.dist
+
+# Scratch files from the nvim 99 plugin. Its tmp_dir is "./tmp", relative to
+# the cwd, so these land in whatever project you happen to be editing — and the
+# *-prompt files contain excerpts of that project's source.
+tmp/99-*
 
 **/.claude/settings.local.json
