@@ -3,7 +3,7 @@
 	editor = nvim
 [user]
 	name = Richard Armstrong
-	email = rarm97@pm.me
+	email = richard@apodosis.co.uk
 [filter "lfs"]
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f
