@@ -1,10 +1,10 @@
 .DS_Store
 __MACOSX/
-.swp
-.swo
-.bak
-.tmp
-.zip
+*.swp
+*.swo
+*.bak
+*.tmp
+*.zip
 tmux/.config/tmux/plugins/
 tmp/
 .claude/

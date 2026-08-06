@@ -1,6 +1,6 @@
 -- Harpoon: bookmark up to 4 files for instant switching.
 -- Faster than telescope for files you're actively working on.
--- <leader>ha to mark, <leader>h1-4 to jump, <leader>hh for the menu.
+-- <leader>ha to mark, <leader>hr to remove, <leader>h1-4 to jump, <leader>hh for the menu.
 return {
     "ThePrimeagen/harpoon",
     branch = "harpoon2",

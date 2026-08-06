@@ -28,11 +28,9 @@ return {
                 lualine_c = { { "filename", path = 1 } },
                 lualine_x = {
                     {
-                        "macro-recording",
-                        fmt = function()
+                        function()
                             local reg = vim.fn.reg_recording()
-                            if reg ~= "" then return "recording @" .. reg end
-                            return ""
+                            return reg ~= "" and ("recording @" .. reg) or ""
                         end,
                     },
                     "searchcount",

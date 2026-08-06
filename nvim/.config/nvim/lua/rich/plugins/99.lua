@@ -47,9 +47,9 @@ return {
                 --- {path = "scratch/custom_rules/vim/SKILL.md", name = "vim"},
                 --- ... the other rules in that dir ...
                 ---
-                custom_rules = {
-                    "scratch/custom_rules/",
-                },
+                -- custom_rules = {
+                --     "scratch/custom_rules/",
+                -- },
 
                 --- Configure @file completion (all fields optional, sensible defaults)
                 files = {

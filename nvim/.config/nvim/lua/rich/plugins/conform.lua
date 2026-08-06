@@ -37,6 +37,13 @@ return {
             c = { "clang-format" },
             cpp = { "clang-format" },
         },
+        formatters = {
+            shfmt = {
+                -- Match the repo's shell scripts (2-space) instead of shfmt's
+                -- default tabs, so format-on-save doesn't reflow them.
+                prepend_args = { "-i", "2", "-ci" },
+            },
+        },
         format_on_save = {
             timeout_ms = 2000,
             lsp_format = "fallback",
