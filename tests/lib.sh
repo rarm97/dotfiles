@@ -223,6 +223,38 @@ with_pty_client() { # $1 = session to attach to, $2... = command to run
   return "$rc"
 }
 
+# Attach a client and PRESS keys, as a person would.
+#
+# Not `tmux send-keys`: that writes to the pane's pty, which is input to the
+# program running there. tmux never sees it as a keypress, so a key binding
+# never fires. This writes to the pty MASTER instead, which is the client's
+# input, and is the only way to exercise a binding as a binding.
+#
+# Blocks until the presses are done and the client has gone.
+press_keys() { # $1 = session to attach to, $2... = keys, e.g. C-a Q
+  local session="$1"
+  shift
+  local helper="$REPO_ROOT/tests/helpers/pty-client.py"
+  [ -f "$helper" ] || {
+    echo "  press_keys: $helper is missing" >&2
+    return 1
+  }
+  python3 "$helper" "$TMUX_SOCK" "$session" --press "$@" --hold 2 >/dev/null 2>&1
+}
+
+# press_keys, but return what the client's terminal actually displayed.
+#
+# This is the only honest way to assert on a status-line message: it is what a
+# person sitting at the terminal would have seen. `tmux show-messages` returns
+# the server's command log instead, which is why an earlier attempt could only
+# check that display-message had been called, not what it said.
+press_keys_capture() { # $1 = session, $2... = keys
+  local session="$1"
+  shift
+  python3 "$REPO_ROOT/tests/helpers/pty-client.py" \
+    "$TMUX_SOCK" "$session" --press "$@" --hold 4 --capture 2>/dev/null
+}
+
 # Standard teardown for a suite that starts a private tmux server: kill it,
 # remove the socket file tmux leaves behind, then clear the scratch dir. Suites
 # with extra cleanup of their own wrap this rather than reimplementing it.
