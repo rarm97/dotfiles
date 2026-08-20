@@ -223,6 +223,22 @@ with_pty_client() { # $1 = session to attach to, $2... = command to run
   return "$rc"
 }
 
+# Poll until a predicate holds, or give up. Terminals are asynchronous, and a
+# fixed sleep encodes the speed of the machine it was written on — which is
+# exactly how the binding suite passed locally and failed on a slower CI runner.
+wait_until() { # $1 = seconds to wait, $2... = predicate
+  local limit="$1"
+  shift
+  local i=0
+  local ticks=$((limit * 4))
+  while [ "$i" -lt "$ticks" ]; do
+    "$@" && return 0
+    i=$((i + 1))
+    sleep 0.25
+  done
+  return 1
+}
+
 # Attach a client and PRESS keys, as a person would.
 #
 # Not `tmux send-keys`: that writes to the pane's pty, which is input to the
@@ -239,7 +255,15 @@ press_keys() { # $1 = session to attach to, $2... = keys, e.g. C-a Q
     echo "  press_keys: $helper is missing" >&2
     return 1
   }
-  python3 "$helper" "$TMUX_SOCK" "$session" --press "$@" --hold 2 >/dev/null 2>&1
+  local err
+  err="$(python3 "$helper" "$TMUX_SOCK" "$session" --press "$@" --hold 2 2>&1 >/dev/null)"
+  local rc=$?
+  if [ "$rc" -ne 0 ]; then
+    printf '  \033[31mFAIL\033[0m  press_keys(%s): %s\n' "$*" "${err:-no reason given}" >&2
+    fail=$((fail + 1))
+    return 1
+  fi
+  return 0
 }
 
 # press_keys, but return what the client's terminal actually displayed.
@@ -252,7 +276,18 @@ press_keys_capture() { # $1 = session, $2... = keys
   local session="$1"
   shift
   python3 "$REPO_ROOT/tests/helpers/pty-client.py" \
-    "$TMUX_SOCK" "$session" --press "$@" --hold 4 --capture 2>/dev/null
+    "$TMUX_SOCK" "$session" --press "$@" --hold 20 --capture 2>/dev/null
+}
+
+# As above, but stay attached until TEXT appears (or the hold runs out). A
+# status-line message is drawn when the work behind it finishes, which on a slow
+# machine is later than any fixed hold you would have picked — the same mistake
+# as sleeping instead of polling, one layer down.
+press_keys_until() { # $1 = session, $2 = text to wait for, $3... = keys
+  local session="$1" text="$2"
+  shift 2
+  python3 "$REPO_ROOT/tests/helpers/pty-client.py" \
+    "$TMUX_SOCK" "$session" --press "$@" --hold 30 --until "$text" 2>/dev/null
 }
 
 # Standard teardown for a suite that starts a private tmux server: kill it,

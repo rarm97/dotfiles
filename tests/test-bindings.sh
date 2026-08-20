@@ -54,6 +54,15 @@ build_server() {
   return 0
 }
 
+# Predicates, so assertions can wait for the thing to happen rather than sleep a
+# number of seconds chosen on this laptop.
+session_gone() { ! t has-session -t "=$1" 2>/dev/null; }
+session_exists() { t has-session -t "=$1" 2>/dev/null; }
+window_count_is() { [ "$(t list-windows -t "$1" 2>/dev/null | wc -l | tr -d ' ')" = "$2" ]; }
+window_index_is() { [ "$(t display-message -p -t "$1" '#{window_index}' 2>/dev/null)" = "$2" ]; }
+last_is_not() { [ "$(readlink "$RDIR/last" 2>/dev/null)" != "$1" ]; }
+save_exists() { [ -e "$RDIR/last" ]; }
+
 build_server || skip_suite "could not start a test tmux server with the real config"
 
 assert "the real bindings are loaded" \
@@ -70,10 +79,9 @@ build_server
 t new-session -d -s keepme
 t new-session -d -s alsokeep
 press_keys work C-a Q
-sleep 1.5
-refute "the attached session is gone" t has-session -t "=work"
-assert "an unrelated session survives" t has-session -t "=keepme"
-assert "...and so does the other one" t has-session -t "=alsokeep"
+assert "the attached session is gone" wait_until 20 session_gone work
+assert "an unrelated session survives" session_exists keepme
+assert "...and so does the other one" session_exists alsokeep
 
 echo
 echo "== ...and on the last session it creates a replacement first =="
@@ -82,9 +90,9 @@ build_server
 n_before="$(t list-sessions | wc -l | tr -d ' ')"
 assert "there is exactly one session to start with" [ "$n_before" -eq 1 ]
 press_keys work C-a Q
-sleep 1.5
-assert "a session still exists afterwards" [ "$(t list-sessions 2>/dev/null | wc -l | tr -d ' ')" -ge 1 ]
-refute "but it is not the one that was killed" t has-session -t "=work"
+assert "the session was killed" wait_until 20 session_gone work
+assert "but a replacement exists, so the client has somewhere to go" \
+  [ "$(t list-sessions 2>/dev/null | wc -l | tr -d ' ')" -ge 1 ]
 
 # ---------------------------------------------------------------- prefix+q
 
@@ -96,18 +104,16 @@ t new-window -t work -n third
 w_before="$(t list-windows -t work | wc -l | tr -d ' ')"
 # confirm-before puts up a "(y/n)" prompt; y answers it.
 press_keys work C-a q y
-sleep 1.5
-assert "one window was killed" [ "$(t list-windows -t work 2>/dev/null | wc -l | tr -d ' ')" -eq $((w_before - 1)) ]
-assert "the session is still there" t has-session -t "=work"
+assert "one window was killed" wait_until 20 window_count_is work "$((w_before - 1))"
+assert "the session is still there" session_exists work
 
 echo
 echo "== ...and falls through to kill-session on the last window =="
 build_server
 t new-session -d -s bystander
 press_keys work C-a q y
-sleep 1.5
-refute "the single-window session was killed rather than emptied" t has-session -t "=work"
-assert "the bystander session is untouched" t has-session -t "=bystander"
+assert "the single-window session was killed rather than emptied" wait_until 20 session_gone work
+assert "the bystander session is untouched" session_exists bystander
 
 # ---------------------------------------------------------------- prefix+s
 
@@ -116,9 +122,8 @@ echo "== prefix+s saves, and says so truthfully =="
 build_server
 t new-window -t work -n two
 t new-window -t work -n three
-screen="$(press_keys_capture work C-a s)"
-sleep 2
-assert "a save was written" [ -e "$RDIR/last" ]
+screen="$(press_keys_until work "saved" C-a s)"
+assert "a save was written" wait_until 20 save_exists
 saved="$(readlink "$RDIR/last")"
 assert "the status line reports the save" contains "$screen" "saved"
 refute "and does not claim a refusal" contains "$screen" "refused"
@@ -132,8 +137,7 @@ for w in $(t list-windows -t work -F '#{window_index}' | tail -n +2); do
   t kill-window -t "work:$w"
 done
 sleep 0.5
-screen="$(press_keys_capture work C-a s)"
-sleep 2
+screen="$(press_keys_until work "refused" C-a s)"
 assert "'last' did not move — the throwaway state was refused" \
   [ "$(readlink "$RDIR/last")" = "$saved" ]
 assert "the status line says it was refused" contains "$screen" "refused"
@@ -142,8 +146,7 @@ refute "and does NOT claim the session was saved" contains "$screen" "saved —"
 echo
 echo "== prefix+M-s forces past the guard =="
 press_keys work C-a M-s
-sleep 3
-refute "the forced save moved 'last'" [ "$(readlink "$RDIR/last")" = "$saved" ]
+assert "the forced save moved 'last'" wait_until 25 last_is_not "$saved"
 assert "the force flag cleared itself" [ -z "$(t show-option -gqv @resurrect-guard-force)" ]
 
 # ---------------------------------------------------------------- prefix+BSpace
@@ -159,9 +162,12 @@ sleep 2
 assert "an editor really is running (guards against a vacuous test)" \
   contains "$(t display-message -p '#{pane_current_command}')" vi
 press_keys work C-a BSpace
-sleep 1.5
 t send-keys -t work Escape ':q!' Enter
-sleep 1.5
+# Wait for the editor to actually exit, so the file on disk is settled before it
+# is compared. Quitting is asynchronous; comparing too early would read the file
+# while vi still held it.
+editor_gone() { ! contains "$(t display-message -p '#{pane_current_command}' 2>/dev/null)" vi; }
+assert "the editor exited" wait_until 20 editor_gone
 assert "the editor's buffer is untouched" cmp -s "$VICTIM" "$TEST_TMP/expected.txt"
 
 # ---------------------------------------------------------------- navigation
@@ -170,8 +176,7 @@ echo
 echo "== window and session navigation =="
 build_server
 press_keys work C-a c
-sleep 1
-assert "prefix+c opens a window" [ "$(t list-windows -t work | wc -l | tr -d ' ')" -eq 2 ]
+assert "prefix+c opens a window" wait_until 20 window_count_is work 2
 # pane_current_path is the resolved path: on macOS /tmp is a symlink to
 # /private/tmp, so comparing against the string passed to -c fails for the wrong
 # reason.
@@ -187,13 +192,9 @@ last_idx="$(t list-windows -t work -F '#{window_index}' | tail -1)"
 prev_idx="$(t list-windows -t work -F '#{window_index}' | tail -2 | head -1)"
 t select-window -t "work:$last_idx"
 press_keys work C-a h
-sleep 1
-assert "prefix+h goes to the previous window" \
-  [ "$(t display-message -p -t work '#{window_index}')" = "$prev_idx" ]
+assert "prefix+h goes to the previous window" wait_until 20 window_index_is work "$prev_idx"
 press_keys work C-a l
-sleep 1
-assert "prefix+l goes to the next window" \
-  [ "$(t display-message -p -t work '#{window_index}')" = "$last_idx" ]
+assert "prefix+l goes to the next window" wait_until 20 window_index_is work "$last_idx"
 
 build_server
 t new-window -t work
@@ -201,9 +202,8 @@ first_idx="$(t list-windows -t work -F '#{window_index}' | head -1)"
 next_idx="$(t list-windows -t work -F '#{window_index}' | sed -n 2p)"
 t select-window -t "work:$first_idx"
 press_keys work C-a L
-sleep 1
 assert "prefix+L swaps the window rightwards and follows it" \
-  [ "$(t display-message -p -t work '#{window_index}')" = "$next_idx" ]
+  wait_until 20 window_index_is work "$next_idx"
 
 # switch-client moves the CLIENT, so #{client_session} is empty again the moment
 # the helper detaches — querying it afterwards says nothing. The status line is
@@ -213,10 +213,10 @@ assert "prefix+L swaps the window rightwards and follows it" \
 build_server
 t rename-session -t work sessone
 t new-session -d -s sesstwo
-screen="$(press_keys_capture sessone C-a j)"
+screen="$(press_keys_until sessone "sesstwo" C-a j)"
 assert "prefix+j switches to the other session" contains "$screen" "sesstwo"
 
-screen="$(press_keys_capture sesstwo C-a k)"
+screen="$(press_keys_until sesstwo "sessone" C-a k)"
 assert "prefix+k switches back" contains "$screen" "sessone"
 
 # ---------------------------------------------------------------- coverage

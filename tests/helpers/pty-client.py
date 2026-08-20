@@ -71,7 +71,7 @@ def main():
     sock, session = sys.argv[1], sys.argv[2]
     args = sys.argv[3:]
 
-    keys, hold, capture = [], 3.0, False
+    keys, hold, capture, until = [], 3.0, False, None
     i = 0
     while i < len(args):
         if args[i] == "--press":
@@ -85,6 +85,13 @@ def main():
         elif args[i] == "--capture":
             capture = True
             i += 1
+        elif args[i] == "--until":
+            # Hold until this text appears rather than for a fixed time. A
+            # status-line message is drawn whenever the work behind it finishes,
+            # which on a slow machine is after any hold you would have guessed.
+            until = args[i + 1]
+            capture = True
+            i += 2
         else:
             i += 1
 
@@ -96,7 +103,9 @@ def main():
         os._exit(1)
 
     # Wait for tmux itself to report the client, rather than sleeping and hoping.
-    deadline = time.time() + 10
+    # Generous: a loaded CI runner can take several seconds to get a client up,
+    # and failing here silently looks like "the binding did nothing".
+    deadline = time.time() + 30
     attached = False
     while time.time() < deadline:
         if clients(sock):
@@ -131,7 +140,7 @@ def main():
         # Terminals are asynchronous: tmux has to read the byte, match it against
         # the key table, and run whatever it is bound to. Pressing the next key
         # immediately can outrun that.
-        time.sleep(0.6)
+        time.sleep(float(os.environ.get("PTY_KEY_DELAY", "0.6")))
         drain()
 
     if not capture:
@@ -140,6 +149,8 @@ def main():
     end = time.time() + hold
     while time.time() < end:
         drain()
+        if until is not None and until in seen.decode("utf-8", "replace"):
+            break
         time.sleep(0.1)
 
     os.kill(pid, signal.SIGKILL)
