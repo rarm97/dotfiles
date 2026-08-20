@@ -73,6 +73,12 @@ brew_install_pkgs() {
   # WezTerm is a cask (GUI)
   log "Installing WezTerm (cask)"
   brew install --cask wezterm || warn "WezTerm cask install failed (rerun later)"
+
+  # wezterm.lua asks for "JetBrainsMono Nerd Font" and starship/lualine are full
+  # of glyphs. Without the font both fall back to Menlo and every icon renders
+  # as tofu — which looks like a config bug rather than a missing font.
+  log "Installing JetBrainsMono Nerd Font (cask)"
+  brew install --cask font-jetbrains-mono-nerd-font || warn "Nerd Font install failed (rerun later)"
 }
 
 install_rust() {

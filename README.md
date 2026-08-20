@@ -101,12 +101,21 @@ Leader is `Space`.
 ```
 make stow       # Apply symlinks (with dry-run)
 make unstow     # Remove symlinks
-make check      # Verify tools and config paths
+make check      # Assert this setup's assumptions still hold
 make doctor     # Debug info (PATH, symlinks, etc.)
 make bootstrap  # Full setup from scratch
+make test       # Run the test suites in tests/
 make tidy       # Report accumulated cruft (deletes nothing)
 make tidy-apply # Act on what tidy reported
 ```
+
+`check` is assertions, not an inventory. Every line corresponds to something
+that was once wrong here for weeks without producing a symptom — a colour scheme
+name that silently fell back, a linter that silently never ran, a completion
+cache that was never used. It exits non-zero on failure.
+
+The rule it exists to enforce: **if it can be wrong without saying so, it isn't
+finished.**
 
 `tidy` reports and `tidy-apply` deletes: old tmux-resurrect saves, stale `99-*`
 scratch files, the nvim LSP log, and branches already merged into `main`.
