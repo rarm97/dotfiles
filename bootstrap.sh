@@ -138,6 +138,14 @@ stow_packages() {
   stow -R -t "$HOME" "${packages[@]}"
 }
 
+install_hooks() {
+  # Local to this repo, not global: core.hooksPath in the stowed git config
+  # would apply to every repo on this machine, none of which have a check.sh.
+  log "Installing git hooks (check on commit, test on push)"
+  git -C "$DOTFILES_DIR" config core.hooksPath .githooks ||
+    warn "Could not set core.hooksPath (run 'make hooks' later)"
+}
+
 post_checks() {
   log "Post-checks (fail fast)"
 
@@ -172,6 +180,7 @@ main() {
   brew_install_pkgs
   install_rust
   stow_packages
+  install_hooks
   post_checks
 }
 

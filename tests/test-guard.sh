@@ -57,7 +57,7 @@ last_msg() { grep DISPLAY "$TESTLOG" 2>/dev/null | tail -1; }
 msg_check() { # $1=desc $2=must-match $3=must-NOT-match
   local got
   got="$(last_msg)"
-  if printf '%s' "$got" | grep -q "$2" && ! printf '%s' "$got" | grep -q "$3"; then
+  if contains "$got" "$2" && ! contains "$got" "$3"; then
     ok "$1"
   else
     no "$1 -> ${got:-(nothing)}"

@@ -242,6 +242,43 @@ if grep -q '(#q' "$REPO/zsh/.zshrc"; then
   fi
 fi
 
+# ---------------------------------------------------------------- shell traps
+
+section "Known shell traps"
+# A pipeline ending in a quiet grep, under `set -o pipefail`: grep exits on the
+# first match, the producer takes SIGPIPE, and the pipeline reports FAILURE even
+# though the pattern matched. This produced four separate false results while
+# this repo was being worked on — including a check that confidently reported a
+# present colour scheme as missing. Use `grep -c` and compare, or the contains()
+# helper in tests/lib.sh, which is a plain case match with no pipeline at all.
+hazard=0
+while IFS= read -r f; do
+  [ -f "$f" ] || continue
+  # pipefail is either set here or inherited by sourcing tests/lib.sh.
+  if ! grep -qE '^[[:space:]]*set .*pipefail' "$f" 2>/dev/null &&
+    ! grep -qE '^[[:space:]]*\.[[:space:]].*lib\.sh' "$f" 2>/dev/null; then
+    continue
+  fi
+  # Comments stripped first: a doc comment describing the hazard is not the
+  # hazard, and counting it would make this check cry wolf about itself.
+  n="$(sed 's/#.*//' "$f" | grep -cE '\|[[:space:]]*grep[[:space:]]+-q')"
+  case "$n" in '' | *[!0-9]*) n=0 ;; esac
+  if [ "$n" -gt 0 ]; then
+    bad "$f: $n pipeline(s) into a quiet grep under pipefail — SIGPIPE reports failure on a MATCH"
+    hazard=$((hazard + n))
+  fi
+done < <(git ls-files '*.sh' 'tmux/.local/bin/*' 2>/dev/null)
+[ "$hazard" -eq 0 ] && ok "no pipeline into a quiet grep under pipefail anywhere in the repo"
+
+# Sourcing a script that sets -e imports it into the caller. tests/lib.sh
+# deliberately does not; under -e a failing assertion aborts the suite instead
+# of reporting FAIL, and the run goes quiet looking exactly like a normal finish.
+if grep -qE '^[[:space:]]*set -[a-z]*e' tests/lib.sh 2>/dev/null; then
+  bad "tests/lib.sh sets -e — a failing assertion would abort the suite instead of reporting"
+else
+  ok "tests/lib.sh does not set -e, so assertions report rather than abort"
+fi
+
 # ---------------------------------------------------------------- make
 
 section "Make targets"
@@ -256,6 +293,31 @@ for target in $phony; do
     bad "make $target is declared .PHONY but has no recipe — it exits 0 doing nothing"
   fi
 done
+
+# ---------------------------------------------------------------- automation
+
+section "Automation"
+# Without the hooks, running these checks depends on someone remembering to —
+# which is precisely how this repo accumulated months of silent defects.
+#
+# Checking that core.hooksPath is SET is not enough. Point it at a directory
+# whose hooks are missing and git runs nothing, says nothing, and every commit
+# sails through unchecked. That happened here: `git add -A` staged .githooks/,
+# a later `git reset --hard` deleted it because it was in the index but not in
+# the target commit, and the path stayed configured. So verify the files.
+hp="$(git config --get core.hooksPath 2>/dev/null)"
+if [ -z "$hp" ]; then
+  bad "git hooks are not installed — run 'make hooks'; nothing runs these checks for you"
+else
+  hooks_ok=1
+  for h in pre-commit pre-push; do
+    if [ ! -x "$hp/$h" ]; then
+      bad "core.hooksPath is '$hp' but $hp/$h is missing or not executable — git runs it silently as a no-op"
+      hooks_ok=0
+    fi
+  done
+  [ "$hooks_ok" -eq 1 ] && ok "git hooks installed and executable (check on commit, test on push)"
+fi
 
 # ---------------------------------------------------------------- summary
 

@@ -60,7 +60,7 @@ touch -t 202001010000 "$W/tmux_resurrect_before-macos-upgrade.txt"
 KA=0 KD=0 run prune --apply >/dev/null 2>&1
 assert "a hand-renamed save is never deleted, however aggressive the policy" \
   [ -f "$W/tmux_resurrect_before-macos-upgrade.txt" ]
-assert "list flags it as pinned" bash -c 'RESURRECT_DIR="'"$W"'" "'"$TOOL"'" list | grep -q pinned'
+assert "list flags it as pinned" contains "$(RESURRECT_DIR="$W" "$TOOL" list)" pinned
 
 reset
 mk 20260805T073237 15
@@ -86,7 +86,7 @@ before="$(find "$W" -name 'tmux_resurrect_*' | wc -l | tr -d ' ')"
 run prune >/dev/null 2>&1
 assert "a dry run deletes nothing" \
   [ "$(find "$W" -name 'tmux_resurrect_*' | wc -l | tr -d ' ')" = "$before" ]
-assert "a dry run says so" bash -c 'RESURRECT_DIR="'"$W"'" "'"$TOOL"'" prune | grep -q "Dry run"'
+assert "a dry run says so" contains "$(RESURRECT_DIR="$W" "$TOOL" prune)" "Dry run"
 
 echo
 echo "== prune reports failure rather than claiming success =="

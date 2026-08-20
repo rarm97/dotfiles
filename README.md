@@ -105,6 +105,7 @@ make check      # Assert this setup's assumptions still hold
 make doctor     # Debug info (PATH, symlinks, etc.)
 make bootstrap  # Full setup from scratch
 make test       # Run the test suites in tests/
+make hooks      # Install the git hooks (check on commit, test on push)
 make tidy       # Report accumulated cruft (deletes nothing)
 make tidy-apply # Act on what tidy reported
 ```
@@ -116,6 +117,11 @@ cache that was never used. It exits non-zero on failure.
 
 The rule it exists to enforce: **if it can be wrong without saying so, it isn't
 finished.**
+
+`make hooks` wires `check` to pre-commit (~1s) and `test` to pre-push (~19s), so
+none of this depends on remembering to run it. `bootstrap.sh` installs them on a
+fresh machine, and `check` fails if they are missing. Bypass a single run with
+`git commit --no-verify` / `git push --no-verify`.
 
 `tidy` reports and `tidy-apply` deletes: old tmux-resurrect saves, stale `99-*`
 scratch files, the nvim LSP log, and branches already merged into `main`.

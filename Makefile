@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help bootstrap stow unstow check doctor tidy tidy-apply test
+.PHONY: help bootstrap stow unstow check doctor tidy tidy-apply test hooks
 
 # `stow` creates ~/.local/bin and ~/.config first on purpose: stow folds a
 # directory into a single symlink when the target is missing and only one
@@ -16,6 +16,7 @@ help:
 	@echo "  make check      - assert this setup's assumptions still hold"
 	@echo "  make doctor     - print useful debug info (PATH, tool locations)"
 	@echo "  make test       - run the test suites in tests/"
+	@echo "  make hooks      - install the git hooks (check on commit, test on push)"
 	@echo "  make tidy       - report cruft that has accumulated (deletes nothing)"
 	@echo "  make tidy-apply - actually clean up what 'tidy' reported"
 
@@ -46,6 +47,12 @@ check:
 
 test:
 	@./tests/run.sh
+
+# Local to this repo, not global: core.hooksPath in the stowed git config would
+# apply to every repo on the machine, none of which have a check.sh.
+hooks:
+	@git config core.hooksPath .githooks
+	@echo "hooks installed: check on commit, test on push (bypass with --no-verify)"
 
 # The things that quietly pile up here. `tidy` only ever reports; every deletion
 # lives in `tidy-apply`, so running the wrong one by accident costs nothing.
