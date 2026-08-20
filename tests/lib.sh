@@ -68,6 +68,17 @@ refute() {
   if "$@"; then no "$desc"; else ok "$desc"; fi
 }
 
+# Bow out of a whole suite because its prerequisite is genuinely absent — not
+# because something failed. Prints a marker run.sh recognises, so a deliberate
+# skip is never mistaken for a suite that died partway through. Those two look
+# identical from the outside otherwise, and CI proved it: test-integration
+# skipped for want of tmux-resurrect and was reported as a failure.
+skip_suite() {
+  printf '  \033[33mSKIP\033[0m  %s\n' "$1"
+  printf '\n  suite skipped\n'
+  exit 0
+}
+
 # Report the suite result. Returns non-zero if anything failed, so the runner
 # and CI both see it.
 finish() {

@@ -13,10 +13,8 @@ trap cleanup_tmux_suite EXIT
 
 t kill-server 2>/dev/null
 sleep 0.3
-t -f /dev/null new-session -d -s alpha -x 80 -y 24 || {
-  echo "  SKIP  could not start a test tmux server"
-  exit 0
-}
+t -f /dev/null new-session -d -s alpha -x 80 -y 24 ||
+  skip_suite "could not start a test tmux server"
 
 # ---------------------------------------------------------------- clear-scrollback
 

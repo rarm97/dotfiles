@@ -9,6 +9,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 
 suites=0
 failed=0
+skipped=0
 names=""
 
 for suite in test-*.sh; do
@@ -24,6 +25,12 @@ for suite in test-*.sh; do
   # run, and the output simply stopped looking perfectly normal.
   case "$out" in
     *"passed,"*) : ;;
+    # A suite may bow out because its prerequisite is genuinely missing (CI has
+    # no tmux-resurrect, for instance). That is not a failure, but it must be
+    # SAID — silence is what this check exists to catch.
+    *"suite skipped"*)
+      skipped=$((skipped + 1))
+      ;;
     *)
       printf '  \033[31mFAIL\033[0m  %s produced no summary — it exited early\n' "$suite"
       rc=1
@@ -41,7 +48,11 @@ if [ "$suites" -eq 0 ]; then
   exit 1
 fi
 if [ "$failed" -eq 0 ]; then
-  printf '  %d suite(s), all passing\n' "$suites"
+  if [ "$skipped" -gt 0 ]; then
+    printf '  %d suite(s), all passing (%d skipped for missing prerequisites)\n' "$suites" "$skipped"
+  else
+    printf '  %d suite(s), all passing\n' "$suites"
+  fi
   exit 0
 fi
 printf '  %d of %d suite(s) FAILED:%s\n' "$failed" "$suites" "$names"

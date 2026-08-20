@@ -34,22 +34,57 @@ reset_repo() {
   )
 }
 
-run_check() { (cd "$WORK" && ./check.sh 2>&1); }
+# Two modes, because check.sh has two halves. The repo half holds on any machine
+# and is what CI exercises; the machine half needs WezTerm, fonts, a stow tree
+# and a git identity, so on a runner its baseline cannot pass and a mutation
+# against it would prove nothing.
+run_check() { (cd "$WORK" && ./check.sh --repo-only 2>&1); }
+run_check_full() { (cd "$WORK" && ./check.sh 2>&1); }
 
 # The core of this suite: a mutation must turn a specific ✓ into a ✗.
 # Passing `check.sh` output is not evidence; a mutation that does NOT break it is.
 mutate() { # $1=description  $2=marker text of the assertion  $3...=command to apply the mutation
   local desc="$1" marker="$2"
   shift 2
+  _mutate repo "$desc" "$marker" "$@"
+}
+
+# Same, but for an assertion that lives in checks/machine.sh.
+mutate_machine() {
+  local desc="$1" marker="$2"
+  shift 2
+  _mutate machine "$desc" "$marker" "$@"
+}
+
+_mutate() { # $1=repo|machine  $2=description  $3=marker  $4...=mutation
+  local mode="$1" desc="$2" marker="$3"
+  shift 3
   reset_repo
   local before after
-  before="$(run_check)"
+  if [ "$mode" = machine ]; then
+    before="$(run_check_full)"
+  else
+    before="$(run_check)"
+  fi
+  # The marker's absence means different things for the two halves. A machine
+  # assertion is simply not present on a box without WezTerm, a stow tree or a
+  # git identity — a CI runner, for instance — and skipping is honest. A REPO
+  # assertion holds everywhere, so if its marker is gone it has been renamed or
+  # deleted and the mutation would pass vacuously.
   if ! contains "$before" "$marker"; then
-    no "$desc — baseline does not contain '$marker' (the assertion may have been renamed)"
+    if [ "$mode" = machine ]; then
+      printf '  \033[33mSKIP\033[0m  %s (not asserted on this machine)\n' "$desc"
+    else
+      no "$desc — baseline does not contain '$marker' (the assertion may have been renamed)"
+    fi
     return
   fi
   (cd "$WORK" && "$@") >/dev/null 2>&1
-  after="$(run_check)"
+  if [ "$mode" = machine ]; then
+    after="$(run_check_full)"
+  else
+    after="$(run_check)"
+  fi
   # The assertion must now report a failure mentioning its subject.
   if contains "$after" "✗"; then
     ok "$desc"
@@ -61,13 +96,20 @@ mutate() { # $1=description  $2=marker text of the assertion  $3...=command to a
 echo "== baseline =="
 reset_repo
 base="$(run_check)"
-assert "a pristine copy passes" contains "$base" "0 failure(s)"
+assert "a pristine copy passes the repository checks" contains "$base" "0 failure(s)"
 refute "and reports no failures" contains "$base" "✗"
+# Not asserted for the machine half: on a CI runner it cannot pass, and a
+# baseline assertion that only holds on one laptop is not worth having.
+if contains "$(run_check_full)" "0 failure(s)"; then
+  ok "a pristine copy passes the machine checks too"
+else
+  printf '  \033[33mSKIP\033[0m  machine checks do not pass here — machine mutations will skip\n'
+fi
 
 echo
 echo "== each assertion must actually fire =="
 
-mutate "a wrong wezterm colour scheme is caught" "colour scheme" \
+mutate_machine "a wrong wezterm colour scheme is caught" "colour scheme" \
   sed -i '' 's/color_scheme = "rose-pine-moon"/color_scheme = "Not A Real Scheme"/' wezterm/.config/wezterm/wezterm.lua
 
 mutate "a missing usstyle is caught" "usstyle" \
@@ -85,7 +127,7 @@ mutate "a deprecated Neovim API is caught" "deprecated" \
 mutate "a plugin file with no lazy spec is caught" "lazy spec" \
   sed -i '' 's/^return {/local _unused = {/' nvim/.config/nvim/lua/rich/plugins/fidget.lua
 
-mutate "a tmux.conf path that does not exist is caught" "every path tmux.conf references" \
+mutate_machine "a tmux.conf path that does not exist is caught" "every path tmux.conf references" \
   sed -i '' 's|~/.local/bin/tmux-clear-scrollback|~/.local/bin/does-not-exist|' tmux/.config/tmux/tmux.conf
 
 mutate "a .PHONY target with no recipe is caught" "has a recipe" \
@@ -110,23 +152,23 @@ mutate "a pipeline into a quiet grep under pipefail is caught" "quiet grep" \
 mutate "tests/lib.sh gaining set -e is caught" "does not set -e" \
   sed -i '' 's/^set -uo pipefail/set -euo pipefail/' tests/lib.sh
 
-mutate "a missing git hook is caught" "hooks installed" \
+mutate_machine "a missing git hook is caught" "hooks installed" \
   rm -f .githooks/pre-commit
 
-mutate "hooks pointing nowhere is caught" "hooks installed" \
+mutate_machine "hooks pointing nowhere is caught" "hooks installed" \
   git config core.hooksPath .nonexistent-hooks
 
-mutate "a git identity that disagrees with the repo is caught" "user.email agrees" \
+mutate_machine "a git identity that disagrees with the repo is caught" "user.email agrees" \
   git config --local user.email someone-else@example.com
 
 echo
 echo "== check.sh's own exit status =="
 reset_repo
-(cd "$WORK" && ./check.sh >/dev/null 2>&1)
+(cd "$WORK" && ./check.sh --repo-only >/dev/null 2>&1)
 assert "a clean repo exits 0" [ $? -eq 0 ]
 (cd "$WORK" && git rm -q --cached nvim/.config/nvim/lazy-lock.json)
 rc=0
-(cd "$WORK" && ./check.sh >/dev/null 2>&1) || rc=$?
+(cd "$WORK" && ./check.sh --repo-only >/dev/null 2>&1) || rc=$?
 assert "a repo with a defect exits non-zero, so a hook or CI can act on it" [ "$rc" -ne 0 ]
 
 finish

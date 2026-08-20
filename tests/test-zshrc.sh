@@ -10,10 +10,7 @@
 
 ZSHRC="$REPO_ROOT/zsh/.zshrc"
 
-if ! command -v zsh >/dev/null 2>&1; then
-  echo "  SKIP  zsh is not installed"
-  exit 0
-fi
+command -v zsh >/dev/null 2>&1 || skip_suite "zsh is not installed"
 
 echo "== the file is valid zsh =="
 assert ".zshrc parses" zsh -n "$ZSHRC"

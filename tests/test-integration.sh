@@ -15,8 +15,7 @@ RDIR="$TEST_TMP/resurrect"
 MARKER="${TMPDIR:-/tmp}/tmux-resurrect-guard-$(id -u).pending"
 
 if [ ! -x "$SAVE" ]; then
-  echo "  SKIP  tmux-resurrect is not installed at $SAVE"
-  exit 0
+  skip_suite "tmux-resurrect is not installed at $SAVE"
 fi
 
 # Consumed by t() and tmux_test_teardown() in lib.sh.
@@ -35,10 +34,7 @@ t kill-server 2>/dev/null
 sleep 0.3
 
 # -f /dev/null so the user's tmux.conf, tpm and continuum play no part.
-t -f /dev/null new-session -d -s alpha || {
-  echo "  SKIP  could not start a test tmux server"
-  exit 0
-}
+t -f /dev/null new-session -d -s alpha || skip_suite "could not start a test tmux server"
 t set -g @resurrect-dir "$RDIR"
 t set -g @resurrect-hook-post-save-layout "$GUARD"
 t set -g @resurrect-hook-post-save-all "$GUARD --post-save-all"
