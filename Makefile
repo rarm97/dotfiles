@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help bootstrap stow unstow check doctor tidy tidy-apply
+.PHONY: help bootstrap stow unstow check doctor tidy tidy-apply test
 
 # `stow` creates ~/.local/bin and ~/.config first on purpose: stow folds a
 # directory into a single symlink when the target is missing and only one
@@ -15,6 +15,7 @@ help:
 	@echo "  make unstow     - unstow packages (reversible)"
 	@echo "  make check      - verify key tools + paths"
 	@echo "  make doctor     - print useful debug info (PATH, tool locations)"
+	@echo "  make test       - run the test suites in tests/"
 	@echo "  make tidy       - report cruft that has accumulated (deletes nothing)"
 	@echo "  make tidy-apply - actually clean up what 'tidy' reported"
 
@@ -57,6 +58,9 @@ check:
 	ls -la "$$HOME/.config/wezterm" 2>/dev/null || echo "~/.config/wezterm: MISSING"; \
 	ls -la "$$HOME/.config/tmux" 2>/dev/null || echo "~/.config/tmux: MISSING"; \
 	ls -la "$$HOME/.config/git" 2>/dev/null || echo "~/.config/git: MISSING"
+
+test:
+	@./tests/run.sh
 
 # The things that quietly pile up here. `tidy` only ever reports; every deletion
 # lives in `tidy-apply`, so running the wrong one by accident costs nothing.
