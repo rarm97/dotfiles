@@ -184,6 +184,45 @@ require_private_socket() {
 
 t() { tmux -L "$TMUX_SOCK" "$@"; }
 
+# Run a command with a REAL tmux client attached on a pseudo-terminal.
+#
+# Several things are only reachable through an attached client: switch-client
+# (which is how tmux-resurrect restores active windows), key bindings, and
+# anything drawn on the status line. A CLI invocation of tmux has no client, so
+# those paths silently do nothing — which is how "restore does not bring back
+# the active window" looked like an upstream bug when it was really the test
+# environment.
+#
+# Attaches to $1, waits until tmux itself reports the client, runs the rest of
+# the arguments, then lets the client go. Returns non-zero without running
+# anything if the client never attaches, rather than proceeding as if it had.
+with_pty_client() { # $1 = session to attach to, $2... = command to run
+  local session="$1"
+  shift
+  local helper="$REPO_ROOT/tests/helpers/pty-client.py"
+  [ -f "$helper" ] || {
+    echo "  with_pty_client: $helper is missing" >&2
+    return 1
+  }
+  python3 "$helper" "$TMUX_SOCK" "$session" --hold 25 >/dev/null 2>&1 &
+  local helper_pid=$!
+  local i=0
+  while [ "$(tmux -L "$TMUX_SOCK" list-clients 2>/dev/null | wc -l | tr -d ' ')" -eq 0 ]; do
+    i=$((i + 1))
+    [ "$i" -gt 60 ] && {
+      kill "$helper_pid" 2>/dev/null
+      echo "  with_pty_client: no client attached" >&2
+      return 1
+    }
+    sleep 0.25
+  done
+  "$@"
+  local rc=$?
+  kill "$helper_pid" 2>/dev/null
+  wait "$helper_pid" 2>/dev/null
+  return "$rc"
+}
+
 # Standard teardown for a suite that starts a private tmux server: kill it,
 # remove the socket file tmux leaves behind, then clear the scratch dir. Suites
 # with extra cleanup of their own wrap this rather than reimplementing it.
