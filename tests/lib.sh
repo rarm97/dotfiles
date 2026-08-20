@@ -173,6 +173,14 @@ require_private_socket() {
 
 t() { tmux -L "$TMUX_SOCK" "$@"; }
 
+# Standard teardown for a suite that starts a private tmux server: kill it,
+# remove the socket file tmux leaves behind, then clear the scratch dir. Suites
+# with extra cleanup of their own wrap this rather than reimplementing it.
+cleanup_tmux_suite() {
+  tmux_test_teardown
+  cleanup_common
+}
+
 # Kill the private server AND remove its socket file. tmux leaves the socket
 # behind when a server exits, so without this every test run adds another dead
 # entry to /tmp/tmux-$UID/ forever.

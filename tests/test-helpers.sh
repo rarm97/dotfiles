@@ -9,11 +9,7 @@
 # shellcheck disable=SC2034  # used by t() and tmux_test_teardown() in lib.sh
 TMUX_SOCK="$(tmux_test_socket helpers)"
 require_private_socket
-cleanup_all() {
-  tmux_test_teardown
-  cleanup_common
-}
-trap cleanup_all EXIT
+trap cleanup_tmux_suite EXIT
 
 t kill-server 2>/dev/null
 sleep 0.3

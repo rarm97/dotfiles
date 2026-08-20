@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help bootstrap stow unstow check doctor tidy tidy-apply test hooks
+.PHONY: help bootstrap stow unstow check check-repo doctor tidy tidy-apply test hooks
 
 # `stow` creates ~/.local/bin and ~/.config first on purpose: stow folds a
 # directory into a single symlink when the target is missing and only one
@@ -14,6 +14,7 @@ help:
 	@echo "  make stow       - stow packages (dry-run then apply)"
 	@echo "  make unstow     - unstow packages (reversible)"
 	@echo "  make check      - assert this setup's assumptions still hold"
+	@echo "  make check-repo - repository checks only (no machine assumptions; what CI runs)"
 	@echo "  make doctor     - print useful debug info (PATH, tool locations)"
 	@echo "  make test       - run the test suites in tests/"
 	@echo "  make hooks      - install the git hooks (check on commit, test on push)"
@@ -44,6 +45,9 @@ unstow:
 
 check:
 	@./check.sh
+
+check-repo:
+	@./check.sh --repo-only
 
 test:
 	@./tests/run.sh

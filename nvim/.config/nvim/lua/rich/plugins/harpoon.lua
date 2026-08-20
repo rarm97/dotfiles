@@ -6,18 +6,25 @@ return {
     branch = "harpoon2",
     dependencies = { "nvim-lua/plenary.nvim" },
 
+    -- Declared as lazy `keys` rather than set inside config: with the mappings
+    -- in config, lazy had no trigger and loaded harpoon (and plenary) at every
+    -- startup whether or not they were used. Same bindings, same behaviour, but
+    -- nothing is required until one is pressed.
+    keys = {
+        { "<leader>ha", function() require("harpoon"):list():add() end,    desc = "Harpoon: Add file" },
+        { "<leader>hr", function() require("harpoon"):list():remove() end, desc = "Harpoon: Remove file" },
+        { "<leader>hh", function()
+            local harpoon = require("harpoon")
+            harpoon.ui:toggle_quick_menu(harpoon:list())
+        end, desc = "Harpoon: Quick Menu" },
+
+        { "<leader>h1", function() require("harpoon"):list():select(1) end, desc = "Harpoon: Go to file 1" },
+        { "<leader>h2", function() require("harpoon"):list():select(2) end, desc = "Harpoon: Go to file 2" },
+        { "<leader>h3", function() require("harpoon"):list():select(3) end, desc = "Harpoon: Go to file 3" },
+        { "<leader>h4", function() require("harpoon"):list():select(4) end, desc = "Harpoon: Go to file 4" },
+    },
+
     config = function()
-        local harpoon = require("harpoon")
-        harpoon:setup()
-        local list = harpoon:list()
-
-        vim.keymap.set("n", "<leader>ha", function() list:add() end, { desc = "Harpoon: Add file" })
-        vim.keymap.set("n", "<leader>hr", function() list:remove() end, { desc = "Harpoon: Remove file" })
-        vim.keymap.set("n", "<leader>hh", function() harpoon.ui:toggle_quick_menu(list) end, { desc = "Harpoon: Quick Menu" })
-
-        vim.keymap.set("n", "<leader>h1", function() list:select(1) end, { desc = "Harpoon: Go to file 1" })
-        vim.keymap.set("n", "<leader>h2", function() list:select(2) end, { desc = "Harpoon: Go to file 2" })
-        vim.keymap.set("n", "<leader>h3", function() list:select(3) end, { desc = "Harpoon: Go to file 3" })
-        vim.keymap.set("n", "<leader>h4", function() list:select(4) end, { desc = "Harpoon: Go to file 4" })
+        require("harpoon"):setup()
     end,
 }

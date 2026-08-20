@@ -102,6 +102,7 @@ Leader is `Space`.
 make stow       # Apply symlinks (with dry-run)
 make unstow     # Remove symlinks
 make check      # Assert this setup's assumptions still hold
+make check-repo # Repository checks only (no machine assumptions; what CI runs)
 make doctor     # Debug info (PATH, symlinks, etc.)
 make bootstrap  # Full setup from scratch
 make test       # Run the test suites in tests/
@@ -118,8 +119,20 @@ cache that was never used. It exits non-zero on failure.
 The rule it exists to enforce: **if it can be wrong without saying so, it isn't
 finished.**
 
+`check` is split in two, and the split matters:
+
+| | |
+|---|---|
+| `checks/repo.sh` | Is the *repository* internally consistent? Holds on any machine with git and the usual text tools, so CI runs it. |
+| `checks/machine.sh` | Is *this machine* set up the way the repo assumes? Needs WezTerm, fonts, a stow tree and a git identity — none of which a CI runner has. |
+
+A check that cannot pass in CI ends up disabled, and a disabled check is worse
+than no check because it still looks like coverage.
+
 `make hooks` wires `check` to pre-commit (~1s) and `test` to pre-push (~19s), so
-none of this depends on remembering to run it. `bootstrap.sh` installs them on a
+none of this depends on remembering to run it. GitHub Actions runs
+`make check-repo` and `make test` on every push, so `--no-verify` and a clone
+that never ran `make hooks` are both covered. `bootstrap.sh` installs them on a
 fresh machine, and `check` fails if they are missing. Bypass a single run with
 `git commit --no-verify` / `git push --no-verify`.
 

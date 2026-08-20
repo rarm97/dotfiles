@@ -1,0 +1,42 @@
+name: checks
+
+# The git hooks run check.sh on commit and the suites on push, but both are
+# local: `--no-verify` skips them, and a fresh clone that never ran `make hooks`
+# never had them. This makes the checks a property of the repository rather than
+# of one laptop.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    # macOS because these dotfiles are macOS-only — bootstrap.sh says so and
+    # exits on anything else. A Linux runner would need every assertion about
+    # WezTerm, fonts and Homebrew paths weakened to pass, which would make the
+    # checks weaker everywhere to serve a platform nobody runs this on.
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Only what the suites and the repo-level checks need. Deliberately NOT
+      # the full bootstrap: installing WezTerm, fonts and language servers to
+      # assert things about this laptop would be slow and would still prove
+      # nothing about a CI runner.
+      - name: Install dependencies
+        run: brew install stow shellcheck shfmt neovim tmux
+
+      - name: Lint
+        run: |
+          shellcheck -x -P tests check.sh tidy.sh bootstrap.sh checks/*.sh tests/*.sh .githooks/*
+          shfmt -i 2 -ci -d check.sh tidy.sh bootstrap.sh checks/*.sh tests/*.sh
+
+      # Repository-internal assertions only. checks/machine.sh needs WezTerm, a
+      # font, a stow tree and a git identity, none of which a runner has; see
+      # check.sh's header for why the two halves are kept apart.
+      - name: Repository checks
+        run: make check-repo
+
+      - name: Test suites
+        run: make test

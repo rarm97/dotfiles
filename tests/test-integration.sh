@@ -24,9 +24,8 @@ fi
 TMUX_SOCK="$(tmux_test_socket integration)"
 require_private_socket
 cleanup_all() {
-  tmux_test_teardown
   rm -f "$MARKER"
-  cleanup_common
+  cleanup_tmux_suite
 }
 trap cleanup_all EXIT
 
