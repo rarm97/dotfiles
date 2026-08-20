@@ -100,6 +100,33 @@ make_save() { # $1=path $2=windows $3=sessions
   printf 'state\tsess1\tsess1\n' >>"$path"
 }
 
+# make_save_sessions <path> <name:count> [<name:count> ...]
+# Explicit per-session sizes, for the cases make_save's round-robin cannot
+# express — e.g. one session losing four windows while the rest are untouched.
+make_save_sessions() {
+  local path="$1"
+  shift
+  local spec name count i
+  NONCE=$((NONCE + 1))
+  : >"$path"
+  for spec in "$@"; do
+    name="${spec%%:*}"
+    count="${spec##*:}"
+    for ((i = 1; i <= count; i++)); do
+      printf 'pane\t%s\t%d\t1\t:*\t1\thost\t:/tmp\t1\tzsh\t:\n' "$name" "$i" >>"$path"
+    done
+  done
+  for spec in "$@"; do
+    name="${spec%%:*}"
+    count="${spec##*:}"
+    for ((i = 1; i <= count; i++)); do
+      printf 'window\t%s\t%d\t:zsh\t1\t:*\t%04x,80x23,0,0,%d\t:\n' \
+        "$name" "$i" "$((NONCE * 256 + i))" "$i" >>"$path"
+    done
+  done
+  printf 'state\t%s\t%s\n' "${1%%:*}" "${1%%:*}" >>"$path"
+}
+
 windows_in() { awk -F'\t' '$1 == "window" { n++ } END { print n + 0 }' "$1" 2>/dev/null; }
 sessions_in() { awk -F'\t' '$1 == "window" && !s[$2]++ { n++ } END { print n + 0 }' "$1" 2>/dev/null; }
 

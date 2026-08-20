@@ -148,8 +148,58 @@ check "once it stops shrinking, the next save confirms" accept $?
 
 reset_work
 seed_last 15 3
+simulate_save 12 3
+check "12/15 overall with every session above 50%: accepted, no hold" accept $?
+
+reset_work
+seed_last 15 3
 simulate_save 8 3
-check "8/15 is above 50%, accepted with no hold" accept $?
+check "8/15 overall looks fine, but one session drops 5->2, so it is held" veto $?
+
+echo
+echo "== rule 2 also watches each session on its own =="
+# The incident this rule exists for: 16 -> 12 windows overall (75% of former
+# size, comfortably inside the total threshold) while marking_gpt went 5 -> 1.
+# Counting only the total could not see it.
+seed_incident() {
+  make_save_sessions "$WORK/tmux_resurrect_20200101T000000.txt" \
+    "Apodosis:2" "Dotfiles:1" "FBScraping:5" "gloryandgains:3" "marking_gpt:5"
+  ln -sfn tmux_resurrect_20200101T000000.txt "$WORK/last"
+}
+save_sessions() {
+  local cand
+  cand="$WORK/tmux_resurrect_20260101T$(printf '%06d' $((NONCE + 1))).txt"
+  make_save_sessions "$cand" "$@"
+  PATH="$STUB:$PATH" "$GUARD" "$cand" >/dev/null 2>&1
+  if ! cmp -s "$cand" "$WORK/last"; then
+    ln -sfn "$(basename "$cand")" "$WORK/last"
+    return 0
+  fi
+  rm -f "$cand"
+  return 1
+}
+
+reset_work
+seed_incident
+save_sessions "Apodosis:2" "Dotfiles:1" "FBScraping:5" "gloryandgains:3" "marking_gpt:1"
+check "the real incident (16->12 total, one session 5->1) is now held" veto $?
+
+reset_work
+seed_incident
+save_sessions "Apodosis:2" "Dotfiles:1" "FBScraping:5" "gloryandgains:3" "marking_gpt:1"
+check "held once" veto $?
+save_sessions "Apodosis:2" "Dotfiles:1" "FBScraping:5" "gloryandgains:3" "marking_gpt:1"
+check "...and accepted when it persists, so a real downsizing is not frozen" accept $?
+
+reset_work
+seed_incident
+save_sessions "Apodosis:2" "Dotfiles:1" "FBScraping:4" "gloryandgains:3" "marking_gpt:4"
+check "ordinary window churn across sessions is not held" accept $?
+
+reset_work
+seed_incident
+save_sessions "Apodosis:2" "Dotfiles:1" "FBScraping:5" "gloryandgains:3"
+check "a session vanishing entirely is held" veto $?
 
 reset_work
 seed_last 15 3

@@ -40,7 +40,8 @@
 #                 rule that catches the bare-"main"-session case.
 #
 #   2. COLLAPSE   A candidate holding less than @resurrect-guard-collapse-pct
-#                 percent of `last`'s windows is suspicious but not necessarily
+#                 percent of `last`'s windows — either in TOTAL, or for any one
+#                 session taken on its own — is suspicious but not necessarily
 #                 wrong — you might genuinely have closed things down. So it is
 #                 vetoed ONCE and the state is remembered. If a later save shows
 #                 the collapse has held, it is accepted: a transient blip will
@@ -227,6 +228,30 @@ count_sessions() {
   awk -F'\t' '$1 == "window" && !seen[$2]++ { n++ } END { print n + 0 }' "$1" 2>/dev/null || echo 0
 }
 
+# Name the worst per-session collapse between two saves, or print nothing.
+# Tab-separated, because session names contain spaces ("FB Scraping").
+#
+# A whole session's work can vanish while the total barely moves. The incident
+# that prompted this went 16 -> 12 windows overall — 75% of its former size,
+# comfortably inside the total-collapse threshold, so nothing fired — while one
+# session went from 5 windows to 1. Counting only the total cannot see that.
+worst_session_collapse() { # $1=last $2=candidate $3=pct
+  awk -F'\t' -v pct="$3" '
+    NR == FNR { if ($1 == "window") a[$2]++; next }
+    { if ($1 == "window") b[$2]++ }
+    END {
+      for (s in a) {
+        c = (s in b) ? b[s] : 0
+        if (c * 100 < a[s] * pct) {
+          loss = a[s] - c
+          if (loss > worst) { worst = loss; name = s; was = a[s]; now = c }
+        }
+      }
+      if (name != "") printf "%s\t%d\t%d\n", name, was, now
+    }
+  ' "$1" "$2" 2>/dev/null
+}
+
 # VETO: make the candidate identical to `last` so resurrect's own cmp check
 # discards it. See the header for why this is the whole trick.
 veto() {
@@ -322,8 +347,20 @@ fi
 #                 re-hold at the new count instead of freezing a state that is
 #                 mid-collapse. This terminates: once the size stops falling,
 #                 the next save confirms.
-if [ "$collapse_pct" -gt 0 ] &&
-  [ $((cand_windows * 100)) -lt $((last_windows * collapse_pct)) ]; then
+collapse_reason=""
+if [ "$collapse_pct" -gt 0 ]; then
+  if [ $((cand_windows * 100)) -lt $((last_windows * collapse_pct)) ]; then
+    collapse_reason="${last_windows}->${cand_windows} windows"
+  else
+    worst="$(worst_session_collapse "$last" "$candidate" "$collapse_pct")"
+    if [ -n "$worst" ]; then
+      IFS=$'\t' read -r sname swas snow <<<"$worst"
+      collapse_reason="session '$sname' ${swas}->${snow} windows"
+    fi
+  fi
+fi
+
+if [ -n "$collapse_reason" ]; then
 
   last_id="$(readlink "$last" 2>/dev/null)"
   [ -n "$last_id" ] || last_id="(not-a-symlink)"
@@ -344,12 +381,12 @@ if [ "$collapse_pct" -gt 0 ] &&
   fi
 
   if [ "$confirmed" -eq 1 ]; then
-    allow "collapse ${last_windows}->${cand_windows} windows confirmed by a second save"
+    allow "collapse ($collapse_reason) confirmed by a second save"
     exit 0
   fi
 
   printf '%s %s\n' "$last_id" "$cand_windows" >"$statefile" 2>/dev/null
-  veto "held collapse ${last_windows}->${cand_windows} windows; will accept if it holds"
+  veto "held collapse ($collapse_reason); will accept if it holds"
   exit 0
 fi
 
