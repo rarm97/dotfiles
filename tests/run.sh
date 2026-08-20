@@ -15,7 +15,21 @@ for suite in test-*.sh; do
   [ -f "$suite" ] || continue
   suites=$((suites + 1))
   printf '\n\033[1m=== %s ===\033[0m\n' "$suite"
-  if bash "$suite"; then :; else
+  out="$(bash "$suite" 2>&1)"
+  rc=$?
+  printf '%s\n' "$out"
+  # A suite that dies partway through prints no summary line, and without this
+  # check that is indistinguishable from one that finished. It happened: sourcing
+  # bootstrap.sh imported its `set -e`, the first failing assertion aborted the
+  # run, and the output simply stopped looking perfectly normal.
+  case "$out" in
+    *"passed,"*) : ;;
+    *)
+      printf '  \033[31mFAIL\033[0m  %s produced no summary — it exited early\n' "$suite"
+      rc=1
+      ;;
+  esac
+  if [ "$rc" -ne 0 ]; then
     failed=$((failed + 1))
     names="$names $suite"
   fi

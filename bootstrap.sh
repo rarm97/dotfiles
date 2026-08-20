@@ -175,4 +175,10 @@ main() {
   post_checks
 }
 
-main "$@"
+# Only run when executed, not when sourced. tests/test-fresh-machine.sh sources
+# this file to call stow_packages() against a throwaway $HOME — the stow
+# tree-folding bug only reproduces on a machine where ~/.local does not yet
+# exist, so it cannot be caught any other way from a machine that already works.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi

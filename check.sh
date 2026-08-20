@@ -176,6 +176,45 @@ if [ -f "$REPO/nvim/.config/nvim/lua/rich/plugins/conform.lua" ]; then
   done
 fi
 
+# These two generalise past whatever anyone has actually read. A dozen plugin
+# files here have never been reviewed line by line; a syntax error or a
+# deprecated call in one of them shows up as "nvim starts a bit oddly" rather
+# than as an error.
+lua_bad=0
+while IFS= read -r f; do
+  nvim --clean --headless -l /dev/stdin "$f" <<'PROBE' >/dev/null 2>&1 || lua_bad=$((lua_bad + 1))
+local ok = loadfile(vim.v.argv[#vim.v.argv])
+os.exit(ok and 0 or 1)
+PROBE
+done < <(find nvim/.config/nvim -name '*.lua' -type f)
+if [ "$lua_bad" -eq 0 ]; then
+  ok "every lua file parses"
+else
+  bad "$lua_bad lua file(s) fail to parse"
+fi
+
+# Renamed or removed in Neovim 0.10/0.11. The deprecated aliases still work, so
+# nothing complains until the version that drops them.
+deprecated="vim\.highlight\.|vim\.lsp\.buf_get_clients|vim\.lsp\.get_active_clients|vim\.tbl_add_reverse_lookup|vim\.lsp\.with\(|vim\.diagnostic\.is_disabled|vim\.validate\(\{"
+hits="$(grep -rInE "$deprecated" nvim/.config/nvim --include='*.lua' 2>/dev/null | grep -vc '^\s*--' || true)"
+if [ "${hits:-0}" -eq 0 ]; then
+  ok "no deprecated Neovim APIs in the lua config"
+else
+  bad "$hits use(s) of deprecated Neovim APIs — they still work, until they do not:"
+  grep -rInE "$deprecated" nvim/.config/nvim --include='*.lua' 2>/dev/null | sed 's/^/      /'
+fi
+
+# lazy.nvim only reads specs returned from lua/rich/plugins/*.lua. A file that
+# returns nothing is loaded, runs, and contributes no plugin — silently.
+specless=0
+for f in nvim/.config/nvim/lua/rich/plugins/*.lua; do
+  grep -qE '^\s*return\s*\{' "$f" || {
+    bad "$(basename "$f") has no top-level 'return {' — lazy will load it and get no spec"
+    specless=$((specless + 1))
+  }
+done
+[ "$specless" -eq 0 ] && ok "every plugin file returns a lazy spec"
+
 if command -v starship >/dev/null 2>&1; then
   if starship print-config >/dev/null 2>&1; then
     ok "starship config parses"
