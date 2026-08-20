@@ -6,11 +6,16 @@ return {
     dependencies = { "nvim-tree/nvim-web-devicons" },
     event = "VeryLazy",
     config = function()
-        -- Refresh lualine when macro recording starts/stops
+        -- Refresh lualine when macro recording starts/stops. Grouped, like every
+        -- other autocmd in this config, so reloading the plugin replaces these
+        -- rather than stacking a second copy that refreshes twice per keystroke.
+        local group = vim.api.nvim_create_augroup("rich-lualine-recording", { clear = true })
         vim.api.nvim_create_autocmd("RecordingEnter", {
+            group = group,
             callback = function() require("lualine").refresh() end,
         })
         vim.api.nvim_create_autocmd("RecordingLeave", {
+            group = group,
             callback = function()
                 vim.defer_fn(function() require("lualine").refresh() end, 50)
             end,

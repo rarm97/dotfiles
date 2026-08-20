@@ -13,6 +13,25 @@
 	defaultBranch = main
 [pull]
 	rebase = true
+[rebase]
+	# Pairs with pull.rebase above: without it a `git pull` with anything dirty
+	# in the tree aborts with "cannot rebase: you have unstaged changes".
+	autoStash = true
+[fetch]
+	# Drop remote-tracking refs whose branch is gone from the remote. Also what
+	# keeps `make tidy`'s merged-branch report honest.
+	prune = true
+[push]
+	# First push of a new branch sets its upstream instead of failing with the
+	# "--set-upstream" hint.
+	autoSetupRemote = true
+[branch]
+	# Most recently worked on first, rather than alphabetical.
+	sort = -committerdate
+[commit]
+	# Put the diff in the commit message buffer, so what you describe is what
+	# you actually staged.
+	verbose = true
 [rerere]
 	enabled = true
 [diff]

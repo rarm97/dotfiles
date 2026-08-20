@@ -54,3 +54,25 @@ vim.api.nvim_create_autocmd("InsertLeave", {
         vim.wo.relativenumber = true
     end,
 })
+
+-- Diagnostics
+--
+-- Neovim's own default is virtual_text = false, so a diagnostic shows up only as
+-- a sign and an underline and you have to open a float to find out what it says.
+-- Verified with :lua =vim.diagnostic.config() on a config that set nothing here.
+--
+-- severity_sort makes the worst problem on a line the one that gets displayed,
+-- rather than whichever server reported first.
+vim.diagnostic.config({
+    severity_sort = true,
+    virtual_text = { prefix = "●", spacing = 2 },
+    signs = {
+        text = {
+            [vim.diagnostic.severity.ERROR] = "󰅚 ",
+            [vim.diagnostic.severity.WARN] = "󰀪 ",
+            [vim.diagnostic.severity.INFO] = "󰋽 ",
+            [vim.diagnostic.severity.HINT] = "󰌶 ",
+        },
+    },
+    float = { border = "rounded", source = true },
+})

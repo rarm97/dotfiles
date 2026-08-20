@@ -6,8 +6,12 @@ return {
     "neovim/nvim-lspconfig",
     event = { "BufReadPre", "BufNewFile" },
     dependencies = {
-        { "williamboman/mason.nvim", config = true },
-        { "williamboman/mason-lspconfig.nvim" },
+        -- mason-org, not williamboman: both repos moved there and the old paths
+        -- are now 301 redirects. Git follows them, so this is future-proofing
+        -- rather than a fix — run :Lazy sync once after this change so lazy
+        -- rewrites the two origins.
+        { "mason-org/mason.nvim", config = true },
+        { "mason-org/mason-lspconfig.nvim" },
         { "hrsh7th/cmp-nvim-lsp" },
     },
 
@@ -74,7 +78,12 @@ return {
             settings = {
                 ["rust-analyzer"] = {
                     cargo = { allFeatures = true },
-                    checkOnSave = { command = "clippy" },
+                    -- checkOnSave is a plain boolean now; the command moved to
+                    -- its own `check` table. Passing the old map form makes
+                    -- rust-analyzer reject the whole key as an invalid config
+                    -- value, so clippy silently never runs on save.
+                    checkOnSave = true,
+                    check = { command = "clippy" },
                 },
             },
         }

@@ -1,6 +1,11 @@
 # ~/.zshrc (interactive shells)
 [[ $- != *i* ]] && return
 
+# Keep $PATH free of duplicates. Without this, re-sourcing .zshrc or starting a
+# shell inside a shell stacks another copy of every entry below, because they all
+# prepend unconditionally. `path` is tied to PATH, so marking it -U covers both.
+typeset -U path PATH
+
 # -------------------------
 # Homebrew — must be early for PATH
 # -------------------------
@@ -117,5 +122,12 @@ else
   PROMPT='%1~ %# '
 fi
 
-# Optional per-machine overrides (not committed)
-[[ -f "$HOME/.zshrc.local" ]] && source "$HOME/.zshrc.local"
+# Optional per-machine overrides (not committed).
+#
+# An `if` rather than `[[ ... ]] && source ...` because this is the LAST thing
+# .zshrc does, and its exit status is what the first prompt sees in $?. With the
+# && form and no override file present that status is 1, so starship draws its
+# red error character before you have run a single command.
+if [[ -f "$HOME/.zshrc.local" ]]; then
+  source "$HOME/.zshrc.local"
+fi

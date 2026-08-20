@@ -26,15 +26,32 @@ vim.api.nvim_create_autocmd("BufWritePre", {
     group = vim.api.nvim_create_augroup("rich-trim-whitespace", { clear = true }),
     pattern = "*",
     callback = function(args)
-        local ok, conform = pcall(require, "conform")
-        if ok then
-            local formatters = conform.list_formatters(args.buf)
-            if #formatters > 0 then
-                return
-            end
+        -- The :%s below edits whatever buffer is CURRENT, not args.buf, so bail
+        -- out when they differ (:bufdo w, nvim_buf_call, a plugin writing in the
+        -- background) rather than trimming the wrong file.
+        if args.buf ~= vim.api.nvim_get_current_buf() then
+            return
         end
-        local pos = vim.api.nvim_win_get_cursor(0)
-        vim.cmd([[%s/\s\+$//e]])
-        vim.api.nvim_win_set_cursor(0, pos)
+
+        -- And a non-modifiable buffer throws E21 straight out of the autocmd,
+        -- which aborts the write and prints a stack trace. Reproduces with
+        -- `nvim -c 'checkhealth vim.lsp' -c 'w out.txt'`.
+        if not vim.bo[args.buf].modifiable then
+            return
+        end
+
+        local ok, conform = pcall(require, "conform")
+        if ok and #conform.list_formatters(args.buf) > 0 then
+            return
+        end
+
+        -- winsaveview rather than just the cursor: :%s can scroll the window,
+        -- and restoring a cursor column that sat inside whitespace we just
+        -- removed puts it past the end of the line. keeppatterns stops the trim
+        -- pattern becoming the last search pattern, which would otherwise land
+        -- in the / history and light up under hlsearch.
+        local view = vim.fn.winsaveview()
+        vim.cmd([[keeppatterns %s/\s\+$//e]])
+        vim.fn.winrestview(view)
     end,
 })

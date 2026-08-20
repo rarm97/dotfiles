@@ -104,4 +104,10 @@ make unstow     # Remove symlinks
 make check      # Verify tools and config paths
 make doctor     # Debug info (PATH, symlinks, etc.)
 make bootstrap  # Full setup from scratch
+make tidy       # Report accumulated cruft (deletes nothing)
+make tidy-apply # Act on what tidy reported
 ```
+
+`tidy` reports and `tidy-apply` deletes: old tmux-resurrect saves, stale `99-*`
+scratch files, the nvim LSP log, and branches already merged into `main`.
+Uncommitted work is only ever reported, never touched.
