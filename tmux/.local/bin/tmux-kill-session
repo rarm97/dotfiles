@@ -16,9 +16,15 @@ if [ -z "${TMUX:-}" ]; then
   exit 1
 fi
 
-name="$(tmux display-message -p '#{session_name}' 2>/dev/null)"
+# #{client_session}, not #{session_name}. With no client attached the latter
+# still returns a name — the most recently active session, NOT the one that
+# invoked this — so the script would confidently kill the wrong session. Verified:
+# with sessions alpha/doomed/survivor and run-shell targeting doomed,
+# #{session_name} resolved to "survivor". #{client_session} is empty when there
+# is no client, which the guard below turns into a loud refusal.
+name="$(tmux display-message -p '#{client_session}' 2>/dev/null)"
 if [ -z "$name" ]; then
-  echo "tmux-kill-session: could not determine the current session" >&2
+  echo "tmux-kill-session: no attached client, so there is no current session to kill" >&2
   exit 1
 fi
 
