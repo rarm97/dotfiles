@@ -137,7 +137,10 @@ if [ -n "$font" ]; then
   fi
 fi
 
-if grep -q 'usstyle' "$REPO/tmux/.config/tmux/tmux.conf"; then
+# Anchored to the set-option line, not to any mention: the comment above it
+# explains what usstyle is, so a bare `grep usstyle` stayed green after the
+# setting itself was removed.
+if grep -qE '^[[:space:]]*set .*terminal-features.*usstyle' "$REPO/tmux/.config/tmux/tmux.conf"; then
   ok "tmux terminal-features declares usstyle (undercurl survives)"
 else
   bad "tmux terminal-features lacks usstyle — nvim's diagnostic undercurls are stripped"
@@ -235,7 +238,9 @@ fi
 # The (#q...) glob qualifier silently does nothing without EXTENDED_GLOB, which
 # made the completion cache unreachable and cost a full compinit every shell.
 if grep -q '(#q' "$REPO/zsh/.zshrc"; then
-  if grep -q 'extendedglob' "$REPO/zsh/.zshrc"; then
+  # Anchored to the setopt line for the same reason: .zshrc's comment explains
+  # why extendedglob is needed, and matching that told us nothing.
+  if grep -qE '^[[:space:]]*setopt[^#]*extendedglob' "$REPO/zsh/.zshrc"; then
     ok ".zshrc enables extendedglob where it uses (#q...) qualifiers"
   else
     bad ".zshrc uses (#q...) without extendedglob — those tests silently never match"
