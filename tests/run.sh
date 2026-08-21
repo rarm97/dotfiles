@@ -7,6 +7,9 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 
+FAST_ONLY=0
+[ "${1:-}" = "--fast" ] && FAST_ONLY=1
+
 suites=0
 failed=0
 skipped=0
@@ -14,11 +17,18 @@ names=""
 
 for suite in test-*.sh; do
   [ -f "$suite" ] || continue
+  # Self-declared, so this cannot drift out of date the way a list here would.
+  if [ "$FAST_ONLY" -eq 1 ] && grep -q '^SUITE_SLOW=1' "$suite"; then
+    printf '\n\033[33m=== %s (skipped: --fast) ===\033[0m\n' "$suite"
+    continue
+  fi
   suites=$((suites + 1))
   printf '\n\033[1m=== %s ===\033[0m\n' "$suite"
+  started=$(date +%s)
   out="$(bash "$suite" 2>&1)"
   rc=$?
   printf '%s\n' "$out"
+  printf '  (%ss)\n' "$(($(date +%s) - started))"
   # A suite that dies partway through prints no summary line, and without this
   # check that is indistinguishable from one that finished. It happened: sourcing
   # bootstrap.sh imported its `set -e`, the first failing assertion aborted the

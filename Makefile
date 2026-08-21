@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help bootstrap stow unstow check check-repo doctor tidy tidy-apply test hooks
+.PHONY: help bootstrap stow unstow check check-repo doctor tidy tidy-apply test test-fast hooks
 
 # `stow` creates ~/.local/bin and ~/.config first on purpose: stow folds a
 # directory into a single symlink when the target is missing and only one
@@ -17,6 +17,7 @@ help:
 	@echo "  make check-repo - repository checks only (no machine assumptions; what CI runs)"
 	@echo "  make doctor     - print useful debug info (PATH, tool locations)"
 	@echo "  make test       - run the test suites in tests/"
+	@echo "  make test-fast  - skip the suites that drive a terminal (seconds, not minutes)"
 	@echo "  make hooks      - install the git hooks (check on commit, test on push)"
 	@echo "  make tidy       - report cruft that has accumulated (deletes nothing)"
 	@echo "  make tidy-apply - actually clean up what 'tidy' reported"
@@ -51,6 +52,9 @@ check-repo:
 
 test:
 	@./tests/run.sh
+
+test-fast:
+	@./tests/run.sh --fast
 
 # Local to this repo, not global: core.hooksPath in the stowed git config would
 # apply to every repo on the machine, none of which have a check.sh.

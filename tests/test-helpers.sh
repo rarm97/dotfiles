@@ -6,6 +6,13 @@
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+# Declared slow: tens of seconds, because it drives a real terminal, editor or
+# language server, or repeats an expensive command many times. `tests/run.sh
+# --fast` skips these; the pre-push hook still runs everything, and so does CI.
+# Read by run.sh with grep, not by this shell.
+# shellcheck disable=SC2034
+SUITE_SLOW=1
+
 # shellcheck disable=SC2034  # used by t() and tmux_test_teardown() in lib.sh
 TMUX_SOCK="$(tmux_test_socket helpers)"
 require_private_socket

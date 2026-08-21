@@ -8,6 +8,13 @@
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+# Declared slow: tens of seconds, because it drives a real terminal, editor or
+# language server, or repeats an expensive command many times. `tests/run.sh
+# --fast` skips these; the pre-push hook still runs everything, and so does CI.
+# Read by run.sh with grep, not by this shell.
+# shellcheck disable=SC2034
+SUITE_SLOW=1
+
 GUARD="$BIN/tmux-resurrect-guard"
 SAVE="$HOME/.config/tmux/plugins/tmux-resurrect/scripts/save.sh"
 TOOL="$BIN/tmux-resurrect-saves"
