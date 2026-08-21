@@ -97,6 +97,14 @@ def main():
 
     # fork_pty gives the child a controlling terminal, which is the whole point:
     # tmux attach refuses to run without one.
+    # tmux refuses to attach when TERM is unset or "dumb" — verified: both fail
+    # immediately, while a real terminal name succeeds. CI runners set neither, so
+    # without this the whole suite reports "no client attached" and gives no clue
+    # as to why.
+    term = os.environ.get("TERM", "")
+    if term in ("", "dumb"):
+        os.environ["TERM"] = "xterm-256color"
+
     pid, fd = pty.fork()
     if pid == 0:
         os.execvp("tmux", ["tmux", "-L", sock, "attach", "-t", session])
@@ -105,7 +113,8 @@ def main():
     # Wait for tmux itself to report the client, rather than sleeping and hoping.
     # Generous: a loaded CI runner can take several seconds to get a client up,
     # and failing here silently looks like "the binding did nothing".
-    deadline = time.time() + 30
+    attach_timeout = 30
+    deadline = time.time() + attach_timeout
     attached = False
     while time.time() < deadline:
         if clients(sock):
@@ -115,7 +124,19 @@ def main():
 
     if not attached:
         os.kill(pid, signal.SIGKILL)
-        sys.exit("pty-client: no client attached after 10s")
+        # Say WHY where possible: the child's own output is the only place a
+        # reason appears, and discarding it leaves a bare "did not attach".
+        reason = ""
+        try:
+            os.set_blocking(fd, False)
+            reason = os.read(fd, 4096).decode("utf-8", "replace").strip()
+        except (BlockingIOError, OSError):
+            pass
+        sys.exit(
+            "pty-client: no client attached after %ss (TERM=%s)%s"
+            % (attach_timeout, os.environ.get("TERM", "unset"),
+               "; child said: " + reason if reason else "")
+        )
 
     # Drain the client's output so tmux is never blocked on a full pty buffer;
     # a wedged client stops responding and looks like a hang. With --capture the
