@@ -38,5 +38,24 @@ jobs:
       - name: Repository checks
         run: make check-repo
 
+      # Without this the runner skips the suites that matter most: restore,
+      # integration, nvim, and five of the bindings. They skip honestly — each
+      # names the file it wanted — but a check that only ever runs on one laptop
+      # is the thing CI exists to replace. Stowing and fetching the tmux plugins
+      # is cheap and makes them real.
+      - name: Install the dotfiles so the suites can exercise them
+        run: |
+          make stow
+          PLUGINS="$HOME/.config/tmux/plugins"
+          mkdir -p "$PLUGINS"
+          git clone --depth 1 https://github.com/tmux-plugins/tpm "$PLUGINS/tpm"
+          git clone --depth 1 https://github.com/tmux-plugins/tmux-resurrect "$PLUGINS/tmux-resurrect"
+          git clone --depth 1 https://github.com/tmux-plugins/tmux-continuum "$PLUGINS/tmux-continuum"
+
+      # First nvim run installs 31 plugins through lazy. Done as its own step so
+      # a network failure here is distinguishable from a test failure.
+      - name: Prime the Neovim plugins
+        run: nvim --headless "+Lazy! sync" +qa || echo "lazy sync failed; the nvim suite will report what it could not do"
+
       - name: Test suites
         run: make test
