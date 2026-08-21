@@ -63,6 +63,17 @@ window_index_is() { [ "$(t display-message -p -t "$1" '#{window_index}' 2>/dev/n
 last_is_not() { [ "$(readlink "$RDIR/last" 2>/dev/null)" != "$1" ]; }
 save_exists() { [ -e "$RDIR/last" ]; }
 
+# tmux.conf invokes helper scripts by absolute path under ~/.local/bin, and the
+# save bindings invoke tmux-resurrect. Neither exists on a machine where the
+# dotfiles have not been stowed and tpm has not run — a CI runner, for instance.
+# The bindings that need them are skipped there, by name, rather than failing for
+# a reason that has nothing to do with the binding.
+KILL_SESSION="$HOME/.local/bin/tmux-kill-session"
+CLEAR_SCROLLBACK="$HOME/.local/bin/tmux-clear-scrollback"
+RESURRECT_SAVE="$HOME/.config/tmux/plugins/tmux-resurrect/scripts/save.sh"
+
+section_skip() { printf '  \033[33mSKIP\033[0m  %s\n' "$1"; }
+
 build_server || skip_suite "could not start a test tmux server with the real config"
 
 assert "the real bindings are loaded" \
@@ -72,103 +83,115 @@ assert "the real bindings are loaded" \
 
 echo
 echo "== prefix+Q kills the session the CLIENT is attached to, and no other =="
-# The path that runs when you actually press it has never been executed by a
-# test. tmux-kill-session reads #{client_session}, which only has a value when a
-# client is attached — so this cannot be checked any other way.
-build_server
-t new-session -d -s keepme
-t new-session -d -s alsokeep
-press_keys work C-a Q
-assert "the attached session is gone" wait_until 20 session_gone work
-assert "an unrelated session survives" session_exists keepme
-assert "...and so does the other one" session_exists alsokeep
+if [ ! -x "$KILL_SESSION" ]; then
+  section_skip "prefix+Q and prefix+q: $KILL_SESSION is not stowed"
+else
+  # The path that runs when you actually press it has never been executed by a
+  # test. tmux-kill-session reads #{client_session}, which only has a value when a
+  # client is attached — so this cannot be checked any other way.
+  build_server
+  t new-session -d -s keepme
+  t new-session -d -s alsokeep
+  press_keys work C-a Q
+  assert "the attached session is gone" wait_until 20 session_gone work
+  assert "an unrelated session survives" session_exists keepme
+  assert "...and so does the other one" session_exists alsokeep
 
-echo
-echo "== ...and on the last session it creates a replacement first =="
-# Otherwise the client has nowhere to go and WezTerm closes with it.
-build_server
-n_before="$(t list-sessions | wc -l | tr -d ' ')"
-assert "there is exactly one session to start with" [ "$n_before" -eq 1 ]
-press_keys work C-a Q
-assert "the session was killed" wait_until 20 session_gone work
-assert "but a replacement exists, so the client has somewhere to go" \
-  [ "$(t list-sessions 2>/dev/null | wc -l | tr -d ' ')" -ge 1 ]
+  echo
+  echo "== ...and on the last session it creates a replacement first =="
+  # Otherwise the client has nowhere to go and WezTerm closes with it.
+  build_server
+  n_before="$(t list-sessions | wc -l | tr -d ' ')"
+  assert "there is exactly one session to start with" [ "$n_before" -eq 1 ]
+  press_keys work C-a Q
+  assert "the session was killed" wait_until 20 session_gone work
+  assert "but a replacement exists, so the client has somewhere to go" \
+    [ "$(t list-sessions 2>/dev/null | wc -l | tr -d ' ')" -ge 1 ]
 
-# ---------------------------------------------------------------- prefix+q
+  # ---------------------------------------------------------------- prefix+q
 
-echo
-echo "== prefix+q kills a window when there is more than one =="
-build_server
-t new-window -t work -n second
-t new-window -t work -n third
-w_before="$(t list-windows -t work | wc -l | tr -d ' ')"
-# confirm-before puts up a "(y/n)" prompt; y answers it.
-press_keys work C-a q y
-assert "one window was killed" wait_until 20 window_count_is work "$((w_before - 1))"
-assert "the session is still there" session_exists work
+  echo
+  echo "== prefix+q kills a window when there is more than one =="
+  build_server
+  t new-window -t work -n second
+  t new-window -t work -n third
+  w_before="$(t list-windows -t work | wc -l | tr -d ' ')"
+  # confirm-before puts up a "(y/n)" prompt; y answers it.
+  press_keys work C-a q y
+  assert "one window was killed" wait_until 20 window_count_is work "$((w_before - 1))"
+  assert "the session is still there" session_exists work
 
-echo
-echo "== ...and falls through to kill-session on the last window =="
-build_server
-t new-session -d -s bystander
-press_keys work C-a q y
-assert "the single-window session was killed rather than emptied" wait_until 20 session_gone work
-assert "the bystander session is untouched" session_exists bystander
+  echo
+  echo "== ...and falls through to kill-session on the last window =="
+  build_server
+  t new-session -d -s bystander
+  press_keys work C-a q y
+  assert "the single-window session was killed rather than emptied" wait_until 20 session_gone work
+  assert "the bystander session is untouched" session_exists bystander
+fi
 
 # ---------------------------------------------------------------- prefix+s
 
 echo
 echo "== prefix+s saves, and says so truthfully =="
-build_server
-t new-window -t work -n two
-t new-window -t work -n three
-screen="$(press_keys_until work "saved" C-a s)"
-assert "a save was written" wait_until 20 save_exists
-saved="$(readlink "$RDIR/last")"
-assert "the status line reports the save" contains "$screen" "saved"
-refute "and does not claim a refusal" contains "$screen" "refused"
+if [ ! -x "$RESURRECT_SAVE" ]; then
+  section_skip "prefix+s and prefix+M-s: tmux-resurrect is not installed"
+else
+  build_server
+  t new-window -t work -n two
+  t new-window -t work -n three
+  screen="$(press_keys_until work "saved" C-a s)"
+  assert "a save was written" wait_until 20 save_exists
+  saved="$(readlink "$RDIR/last")"
+  assert "the status line reports the save" contains "$screen" "saved"
+  refute "and does not claim a refusal" contains "$screen" "refused"
 
-echo
-echo "== ...and when the guard vetoes, it says THAT, not 'saved' =="
-# The bug this binding was rewritten for: it used to print "Session saved"
-# unconditionally, on top of the guard's veto notice, telling you the opposite
-# of what happened.
-for w in $(t list-windows -t work -F '#{window_index}' | tail -n +2); do
-  t kill-window -t "work:$w"
-done
-sleep 0.5
-screen="$(press_keys_until work "refused" C-a s)"
-assert "'last' did not move — the throwaway state was refused" \
-  [ "$(readlink "$RDIR/last")" = "$saved" ]
-assert "the status line says it was refused" contains "$screen" "refused"
-refute "and does NOT claim the session was saved" contains "$screen" "saved —"
+  echo
+  echo "== ...and when the guard vetoes, it says THAT, not 'saved' =="
+  # The bug this binding was rewritten for: it used to print "Session saved"
+  # unconditionally, on top of the guard's veto notice, telling you the opposite
+  # of what happened.
+  for w in $(t list-windows -t work -F '#{window_index}' | tail -n +2); do
+    t kill-window -t "work:$w"
+  done
+  sleep 0.5
+  screen="$(press_keys_until work "refused" C-a s)"
+  assert "'last' did not move — the throwaway state was refused" \
+    [ "$(readlink "$RDIR/last")" = "$saved" ]
+  assert "the status line says it was refused" contains "$screen" "refused"
+  refute "and does NOT claim the session was saved" contains "$screen" "saved —"
 
-echo
-echo "== prefix+M-s forces past the guard =="
-press_keys work C-a M-s
-assert "the forced save moved 'last'" wait_until 25 last_is_not "$saved"
-assert "the force flag cleared itself" [ -z "$(t show-option -gqv @resurrect-guard-force)" ]
+  echo
+  echo "== prefix+M-s forces past the guard =="
+  press_keys work C-a M-s
+  assert "the forced save moved 'last'" wait_until 25 last_is_not "$saved"
+  assert "the force flag cleared itself" [ -z "$(t show-option -gqv @resurrect-guard-force)" ]
+fi
 
 # ---------------------------------------------------------------- prefix+BSpace
 
 echo
 echo "== prefix+BSpace does not type into whatever owns the pane =="
-build_server
-VICTIM="$TEST_TMP/victim.txt"
-printf 'hello world\nsecond line\n' >"$VICTIM"
-cp "$VICTIM" "$TEST_TMP/expected.txt"
-t send-keys -t work "vi $VICTIM" Enter
-sleep 2
-assert "an editor really is running (guards against a vacuous test)" \
-  contains "$(t display-message -p '#{pane_current_command}')" vi
-press_keys work C-a BSpace
-t send-keys -t work Escape ':q!' Enter
-# Wait for the editor to actually exit, so the file on disk is settled before it
-# is compared. Quitting is asynchronous; comparing too early would read the file
-# while vi still held it.
-editor_gone() { ! contains "$(t display-message -p '#{pane_current_command}' 2>/dev/null)" vi; }
-assert "the editor exited" wait_until 20 editor_gone
-assert "the editor's buffer is untouched" cmp -s "$VICTIM" "$TEST_TMP/expected.txt"
+if [ ! -x "$CLEAR_SCROLLBACK" ]; then
+  section_skip "prefix+BSpace: $CLEAR_SCROLLBACK is not stowed"
+else
+  build_server
+  VICTIM="$TEST_TMP/victim.txt"
+  printf 'hello world\nsecond line\n' >"$VICTIM"
+  cp "$VICTIM" "$TEST_TMP/expected.txt"
+  t send-keys -t work "vi $VICTIM" Enter
+  sleep 2
+  assert "an editor really is running (guards against a vacuous test)" \
+    contains "$(t display-message -p '#{pane_current_command}')" vi
+  press_keys work C-a BSpace
+  t send-keys -t work Escape ':q!' Enter
+  # Wait for the editor to actually exit, so the file on disk is settled before it
+  # is compared. Quitting is asynchronous; comparing too early would read the file
+  # while vi still held it.
+  editor_gone() { ! contains "$(t display-message -p '#{pane_current_command}' 2>/dev/null)" vi; }
+  assert "the editor exited" wait_until 20 editor_gone
+  assert "the editor's buffer is untouched" cmp -s "$VICTIM" "$TEST_TMP/expected.txt"
+fi
 
 # ---------------------------------------------------------------- navigation
 
