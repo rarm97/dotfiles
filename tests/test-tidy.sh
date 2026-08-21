@@ -45,6 +45,17 @@ tidy_rc() {
       make "$1" >/dev/null 2>&1
   )
 }
+# Same run, but keeping what it said. A non-zero status tells a cron job that
+# something went wrong; it does not tell a person WHICH thing, and the messages
+# that carry that were never asserted — tidy could go silent about the cause and
+# only the status assertion would still pass.
+tidy_out() {
+  (
+    cd "$REPO" || exit 1
+    HOME="$FAKE_HOME" RESURRECT_DIR="$RDIR" PATH="$BIN:$PATH" \
+      make "$1" 2>&1
+  )
+}
 
 echo "== tidy reports without deleting =="
 setup_repo
@@ -173,8 +184,13 @@ printf 'x\n' >"$REPO/tmp/99-undeletable"
 touch -t 202001010000 "$REPO/tmp/99-undeletable"
 chmod a-w "$REPO/tmp"
 rc=0
-tidy_rc tidy-apply || rc=$?
+out="$(tidy_out tidy-apply)" || rc=$?
 chmod u+w "$REPO/tmp"
 assert "a wrapper or cron job can tell that it did not do its job" [ "$rc" -ne 0 ]
+assert "and a person is told which file it could not delete" \
+  contains "$out" "99-undeletable"
+assert "with FAILED against it, not buried in ordinary output" contains "$out" "FAILED:"
+assert "and a count at the end, so a long report cannot hide it" \
+  contains "$out" "action(s) FAILED"
 
 finish
