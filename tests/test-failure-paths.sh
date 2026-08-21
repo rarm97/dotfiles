@@ -241,4 +241,43 @@ assert "'last' still points at the save it did before" \
 # GNU date invocations fail, which on a machine without a working `date` means
 # nothing else in the script works either.
 
+# ------------------------------------------------------- the guard's own exits
+
+echo
+echo "== the guard's early exits =="
+# Same sweep, run against tmux-resurrect-guard. Most of its `||` fallbacks
+# resisted a meaningful mutation rather than a meaningful test — `|| echo 0` on
+# an awk that already prints 0 from END, `|| value=""` on an assignment that is
+# empty anyway. Two were real gaps.
+
+# Resurrect passes the candidate path as $1. Nothing guarantees it is there:
+# a hook fired with no argument, or after the file has been moved.
+W="$TEST_TMP/nocand"
+fresh "$W"
+before="$(readlink "$W/last")"
+PATH="$STUB:$PATH" "$GUARD" >/dev/null 2>&1
+assert "no argument at all: exits 0 rather than acting on nothing" [ "$?" -eq 0 ]
+PATH="$STUB:$PATH" "$GUARD" "$W/tmux_resurrect_29991231T235959.txt" >/dev/null 2>&1
+assert "a candidate that does not exist: exits 0" [ "$?" -eq 0 ]
+assert "'last' is untouched by either" [ "$(readlink "$W/last")" = "$before" ]
+refute "and nothing was written to the status line" \
+  contains "$(cat "$TESTLOG" 2>/dev/null)" "resurrect guard"
+
+echo
+echo "== notify off: the veto still happens, it just says nothing =="
+# @resurrect-guard-notify off is a real setting and had never been exercised.
+# The failure it protects against is the opposite of loud — but a veto that
+# stopped happening because notification was disabled would be far worse, so
+# both halves are asserted.
+W="$TEST_TMP/quiet"
+fresh "$W"
+cand="$W/tmux_resurrect_20200101T060000.txt"
+make_save "$cand" 1 1
+GOPT_RESURRECT_GUARD_NOTIFY=off PATH="$STUB:$PATH" "$GUARD" "$cand" >/dev/null 2>&1
+assert "the degenerate save was still vetoed" cmp -s "$cand" "$W/last"
+assert "and the reason is still in the log, where it can be found later" \
+  contains "$(cat "$W/guard.log" 2>/dev/null)" "VETO"
+refute "but nothing reached the status line" \
+  contains "$(cat "$TESTLOG" 2>/dev/null)" "resurrect guard"
+
 finish
