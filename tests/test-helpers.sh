@@ -83,13 +83,34 @@ echo "== ...and inside tmux with no client, it refuses rather than guessing =="
 t new-session -d -s doomed
 t new-session -d -s survivor
 n_before="$(t list-sessions | wc -l | tr -d ' ')"
-t run-shell -t doomed:0 "$BIN/tmux-kill-session >$TEST_TMP/kill.out 2>&1"
+# run-shell discards the script's exit status, so record it explicitly. Without
+# this the assertions below pass with the `exit 1` deleted: the message is still
+# printed, and `kill-session -t "="` with an empty name happens to fail rather
+# than kill something — the right outcome by accident, not by design.
+t run-shell -t doomed:0 \
+  "$BIN/tmux-kill-session >$TEST_TMP/kill.out 2>&1; echo \$? >$TEST_TMP/kill.rc"
 sleep 1.5
 assert "it refuses when it cannot identify the session" \
   contains "$(cat "$TEST_TMP/kill.out" 2>/dev/null)" "no attached client"
+assert "and exits non-zero rather than carrying on with an empty name" \
+  [ "$(cat "$TEST_TMP/kill.rc" 2>/dev/null)" != "0" ]
+# The refusal must be the ONLY thing it says. Deleting the `exit` leaves the
+# status non-zero anyway — `kill-session -t "="` cannot match a session, so it
+# fails and that becomes the status — which makes the status assertion above
+# pass for a reason the script does not rely on. What actually changes is that
+# it goes on to attempt switch-client and kill-session after having refused,
+# and tmux answers with "no current client" and "no mouse target".
+assert "and says nothing further — it stops rather than attempting the kill" \
+  [ "$(grep -c . "$TEST_TMP/kill.out" 2>/dev/null)" -eq 1 ]
 assert "and kills nothing at all" [ "$(t list-sessions | wc -l | tr -d ' ')" = "$n_before" ]
 assert "specifically, it did not kill some unrelated session" t has-session -t "=survivor"
 
+# NOT COVERED, deliberately: the branch where `tmux new-session -d` fails while
+# killing the last session, so the client would be left with nowhere to go.
+# Reaching it needs a server that accepts commands but cannot create a session,
+# and there is no honest way to stage that — stubbing tmux would test the stub.
+# Recorded here so the next mutation sweep does not rediscover it as a gap.
+#
 # NOT COVERED: the real path, where a key press supplies a client and the script
 # kills that client's session. Driving a genuine attached client from a test
 # needs a pty the harness does not have, and a test that fakes it would only be
