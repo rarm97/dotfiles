@@ -40,12 +40,33 @@ fail=0
 export pass warn fail
 
 # Each half is sourced rather than executed so its counters land here.
-# shellcheck source=/dev/null
-. ./checks/repo.sh
+#
+# Guarded, because a missing half is the worst failure this script can have.
+# `.` on a file that is not there prints one line to stderr and CARRIES ON:
+# without this, deleting checks/repo.sh made check.sh report "0 ok, 0
+# warning(s), 0 failure(s)" and exit 0. CI passes, the pre-commit hook passes,
+# and the entire safety net has quietly gone. Verified before fixing.
+run_half() {
+  [ -r "$1" ] || {
+    printf '\033[31mcheck.sh: cannot read %s — the checks did not run\033[0m\n' "$1" >&2
+    exit 1
+  }
+  # shellcheck source=/dev/null
+  . "$1"
+}
+
+run_half ./checks/repo.sh
 
 if [ "$REPO_ONLY" -eq 0 ]; then
-  # shellcheck source=/dev/null
-  . ./checks/machine.sh
+  run_half ./checks/machine.sh
+fi
+
+# And a half that exists but asserts nothing is the same failure wearing a
+# better disguise — a truncated file, a syntax error partway through, an early
+# return. A run that checked nothing is not a pass.
+if [ "$((pass + warn + fail))" -eq 0 ]; then
+  printf '\033[31mcheck.sh: no checks ran at all\033[0m\n' >&2
+  exit 1
 fi
 
 printf '\n\033[1mSummary\033[0m\n'

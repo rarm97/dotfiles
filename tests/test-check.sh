@@ -178,4 +178,47 @@ rc=0
 (cd "$WORK" && ./check.sh --repo-only >/dev/null 2>&1) || rc=$?
 assert "a repo with a defect exits non-zero, so a hook or CI can act on it" [ "$rc" -ne 0 ]
 
+# ------------------------------------------------------- the checks themselves
+
+echo
+echo "== a missing half must not read as a clean pass =="
+# The worst failure check.sh can have, and it was live. `.` on a file that is
+# not there prints one line to stderr and carries on, so deleting checks/repo.sh
+# produced "0 ok, 0 warning(s), 0 failure(s)" and exit 0 — CI green, pre-commit
+# hook green, nothing being checked at all.
+reset_repo
+rm -f "$WORK/checks/repo.sh"
+out="$(run_check)"
+rc=$?
+assert "it exits non-zero rather than reporting nothing wrong" [ "$rc" -ne 0 ]
+# check.sh's OWN message, not bash's "No such file or directory". Both mention
+# the path, so asserting on the path alone passes with the guard removed — the
+# no-checks-ran guard below would still catch the missing file, but only after
+# the fact and without saying what was unreadable.
+assert "and says itself that it could not read the file" \
+  contains "$out" "cannot read ./checks/repo.sh"
+refute "it does not print a summary that looks like success" contains "$out" "0 failure(s)"
+
+echo
+echo "== ...nor must a half that exists but asserts nothing =="
+# The same failure with a better disguise: a truncated file, a syntax error
+# partway through, an early return. A run that checked nothing is not a pass.
+reset_repo
+: >"$WORK/checks/repo.sh"
+out="$(run_check)"
+rc=$?
+assert "an empty half is a failure, not a clean run" [ "$rc" -ne 0 ]
+assert "and says so plainly" contains "$out" "no checks ran"
+
+echo
+echo "== --repo-only does not depend on the machine half =="
+# Deliberate: CI has no WezTerm, fonts or stow tree, so requiring machine.sh
+# there would either fail the run or push someone to disable the check.
+reset_repo
+rm -f "$WORK/checks/machine.sh"
+out="$(run_check)"
+rc=$?
+assert "the repo half still runs and passes" [ "$rc" -eq 0 ]
+assert "and reports the checks it did run" contains "$out" "ok,"
+
 finish
