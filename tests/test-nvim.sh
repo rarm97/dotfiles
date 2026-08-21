@@ -95,6 +95,16 @@ echo "== format-on-save actually reformats =="
 format_check() { # $1 = extension, $2 = ugly content, $3 = expected formatter
   local ext="$1" ugly="$2" want="$3"
   local f="$SANDBOX/fmt.$ext"
+  # A formatter that is not installed is an environment fact, not a defect in
+  # the config — skip and say which, the way every other suite here does. Only a
+  # formatter that IS present but which conform will not offer is a failure.
+  # This guard was lost when the assertion was rewritten to ask conform, and CI
+  # duly reported two missing binaries as config failures.
+  if ! command -v "$want" >/dev/null 2>&1 &&
+    [ ! -x "$HOME/.local/share/nvim/mason/bin/$want" ]; then
+    printf '  \033[33mSKIP\033[0m  %s: %s is not installed on this machine\n' "$ext" "$want"
+    return 0
+  fi
   printf '%s' "$ugly" >"$f"
   local out
   out="$(nv "$f" \

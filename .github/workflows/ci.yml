@@ -25,7 +25,7 @@ jobs:
       # assert things about this laptop would be slow and would still prove
       # nothing about a CI runner.
       - name: Install dependencies
-        run: brew install stow shellcheck shfmt neovim tmux
+        run: brew install stow shellcheck shfmt neovim tmux stylua prettier
 
       - name: Lint
         run: |
