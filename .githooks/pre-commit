@@ -1,9 +1,22 @@
 #!/usr/bin/env bash
-# Assert this setup's assumptions before every commit. ~1s.
+# Assert this setup's assumptions before every commit. ~1s (measured, not guessed).
 #
 # The point of check.sh is that it runs without anyone remembering to run it —
 # otherwise the repo's health depends on someone deciding to look, which is how
 # it accumulated months of silent defects in the first place.
+#
+# This runs the FULL check.sh, machine half included, which is deliberate. The
+# machine checks that can FAIL are all real breakage — a stow tree folded into a
+# symlink, a pending stow, a dead git identity, a missing colour scheme or font,
+# hooks not installed. Committing on top of any of those is how this repo
+# accumulated months of silent defects.
+#
+# What makes that safe is that the volatile things are WARNINGS, not failures:
+# a formatter missing from PATH reports `!` and does not fail the run. So a
+# half-set-up machine can still commit. Asserted in tests/test-hooks.sh, because
+# turning one of those into a hard failure would block every commit until
+# someone installed a formatter, and the person it happened to would have no
+# idea why.
 #
 # Bypass for a genuinely unrelated commit with: git commit --no-verify
 exec "$(git rev-parse --show-toplevel)/check.sh"

@@ -1,8 +1,23 @@
 #!/usr/bin/env bash
-# Run the test suites before anything leaves this machine. ~19s.
+# Run the fast test suites before anything leaves this machine. ~26s.
 #
-# Too slow for every commit, fast enough for a push, and a push is the point
-# where a regression stops being yours alone.
+# --fast, not the full run, and the reasoning matters because it is a real
+# trade-off rather than an oversight.
+#
+# The full suite is 16 suites and takes just over FOUR MINUTES on this machine —
+# measured, after the header here had claimed ~19s for long enough to become
+# untrue. Eight of those suites drive a real terminal, editor or language
+# server, and that is where all the time goes.
+#
+# A four-minute pre-push hook is one you start passing --no-verify to, and a
+# hook that is routinely bypassed is worse than no hook at all, because it still
+# looks like coverage. Twelve seconds is a hook you leave alone.
+#
+# What --fast skips is not unguarded: CI runs the COMPLETE suite on every push,
+# so the pty-driven suites are checked on the way in rather than on the way out.
+# The window this leaves open is a regression that reaches the remote and is
+# caught minutes later by CI instead of instantly here. That is the price, and
+# it buys a hook that actually runs.
 #
 # Bypass with: git push --no-verify
-exec "$(git rev-parse --show-toplevel)/tests/run.sh"
+exec "$(git rev-parse --show-toplevel)/tests/run.sh" --fast

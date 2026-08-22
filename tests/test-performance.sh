@@ -153,4 +153,31 @@ if command -v zsh >/dev/null 2>&1; then
   refute "a warm shell does not rebuild the completion dump" contains "$prof" "compdump"
 fi
 
+echo
+echo "== the pre-push hook stays fast enough to leave switched on =="
+# The reason this is measured rather than asserted by comment: the header of
+# .githooks/pre-push claimed ~19s for long enough that it became untrue by a
+# factor of twelve. The full suite had grown to just over four minutes, which is
+# a hook people pass --no-verify to, and a hook that is routinely bypassed is
+# worse than none because it still looks like coverage.
+#
+# So the hook runs --fast, and this keeps that honest. Safe to invoke from here
+# and nowhere else: this suite is SUITE_SLOW, so --fast excludes it and the
+# nested run cannot re-enter itself.
+#
+# A minute is the ceiling rather than the current 26s, because the point is to
+# catch the hook becoming something you avoid, not to fail on a busy machine.
+HOOK_CEILING_S=60
+start="$(date +%s)"
+"$REPO_ROOT/tests/run.sh" --fast >/dev/null 2>&1
+elapsed=$(($(date +%s) - start))
+printf '    %-22s %ss   (ceiling %ss)\n' "run.sh --fast" "$elapsed" "$HOOK_CEILING_S"
+if [ "$elapsed" -lt "$HOOK_CEILING_S" ]; then
+  ok "the pre-push suite runs in ${elapsed}s, fast enough to leave enabled"
+else
+  no "the pre-push suite takes ${elapsed}s — long enough that it will get bypassed"
+  echo "    slowest suites in the fast set:"
+  "$REPO_ROOT/tests/run.sh" --fast 2>&1 | grep -B1 '([0-9][0-9]*s)' | tail -6 | sed 's/^/      /'
+fi
+
 finish
