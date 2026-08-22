@@ -2,6 +2,12 @@
 # tmux-sessionizer — fuzzy-find a project directory and open it in a named tmux session
 # Inspired by ThePrimeagen
 
+# -u because an unset variable here means a session name built from nothing, and
+# the failure mode of this script is going to the WRONG place, not stopping.
+# No -e: a failed switch-client at the end should not change what has already
+# been created, and the branches below handle their own failures explicitly.
+set -uo pipefail
+
 # Directories to search for projects (depth 1)
 SEARCH_DIRS=(
   ~/dotfiles
@@ -14,6 +20,13 @@ SEARCH_DIRS=(
 if [[ $# -eq 1 ]]; then
   selected=$1
 else
+  # Without this, a machine that has no fzf runs the pipeline, gets an empty
+  # selection, and exits 0 — indistinguishable from pressing Escape. The script
+  # appears to do nothing, successfully, which is the hardest thing to diagnose.
+  if ! command -v fzf >/dev/null 2>&1; then
+    echo "tmux-sessionizer: fzf is not installed, so there is nothing to pick with" >&2
+    exit 1
+  fi
   # Build list: the search dirs themselves + their immediate children
   selected=$(
     (
@@ -27,25 +40,49 @@ fi
 
 [[ -z "$selected" ]] && exit 0
 
-# Session name: basename, dots replaced with underscores (tmux dislikes dots)
-session_name=$(basename "$selected" | tr . _)
+# tmux uses '.' and ':' as target separators, so it will not store a session
+# name containing either — it substitutes underscores silently. Verified: a
+# session created as "a.b" is stored as "a_b", and creating "a:b" afterwards
+# fails with "duplicate session: a_b".
+#
+# So this is not cosmetic. If the name were left alone, every lookup below would
+# ask tmux about a name it never stored, find nothing, and conclude there was no
+# collision. The script handled dots and not colons, and two directories
+# differing only by a colon collapsed into one session.
+tmux_name() { basename "$1" | tr '.:' '__'; }
+
+session_name="$(tmux_name "$selected")"
 
 # Two search roots can hold projects with the same basename (~/coding_projects/api
-# and ~/learning/api both want to be "api"). Without this, picking the second one
-# just switches to the first one's session and silently takes you to the wrong
-# code. If the name is taken by a session rooted somewhere else, qualify it with
-# its parent directory.
+# and ~/learning/api both want to be "api"). Without qualification, picking the
+# second just switches to the first one's session and silently takes you to the
+# wrong code.
+#
+# Qualify with as many parent components as it takes, not one. One level is not
+# enough and the failure it leaves behind is the original bug exactly:
+# ~/learning/api and ~/other/learning/api BOTH qualify to "learning_api", so the
+# second matches the first's session and switches you to the wrong project.
+# Reproduced against a real server before this loop replaced the single step.
 #
 # The path has to come from `list-sessions -F` — `display-message -p -t "=name"`
 # expects a pane target and returns empty for a session name.
-existing_path=$(
+path_of_session() {
   tmux list-sessions -F '#{session_name}	#{session_path}' 2>/dev/null |
-    awk -F'\t' -v n="$session_name" '$1 == n { print $2; exit }'
-)
-if [[ -n "$existing_path" && "$existing_path" != "$selected" ]]; then
-  parent=$(basename "$(dirname "$selected")" | tr . _)
-  session_name="${parent}_${session_name}"
-fi
+    awk -F'\t' -v n="$1" '$1 == n { print $2; exit }'
+}
+
+remaining="$(dirname "$selected")"
+while :; do
+  existing_path="$(path_of_session "$session_name")"
+  # Free, or already ours: either way this is the name to use.
+  [[ -z "$existing_path" || "$existing_path" == "$selected" ]] && break
+  # Out of components to add. The name is now the whole path, which can only
+  # still collide with an identical path — and an identical path would have
+  # matched the test above. Break rather than loop forever on dirname / == /.
+  [[ "$remaining" == "/" || "$remaining" == "." ]] && break
+  session_name="$(tmux_name "$remaining")_${session_name}"
+  remaining="$(dirname "$remaining")"
+done
 
 # If not inside tmux, create or attach
 if [[ -z "${TMUX:-}" ]]; then

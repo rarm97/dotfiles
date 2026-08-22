@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The three older tmux helpers. Each assertion here is a bug that was live.
+# The older tmux helpers. Each assertion here is a bug that was live.
 #
 # Real tmux, private socket. These scripts drive a terminal, so there is no
 # honest way to test them without one.
@@ -118,37 +118,8 @@ assert "specifically, it did not kill some unrelated session" t has-session -t "
 # the session the invoking client is attached to — but that is reasoning, not a
 # passing assertion, and it is recorded here rather than left implied.
 
-# ---------------------------------------------------------------- sessionizer
-
-echo
-echo "== tmux-sessionizer disambiguates same-named projects =="
-# Named by basename alone, ~/coding_projects/api and ~/learning/api collided:
-# picking the second silently switched you to the first one's session.
-mkdir -p "$TEST_TMP/coding_projects/api" "$TEST_TMP/learning/api"
-first="$TEST_TMP/coding_projects/api"
-second="$TEST_TMP/learning/api"
-
-# Exercise the script's own naming logic by driving it with an explicit path,
-# which is the branch `if [[ $# -eq 1 ]]` takes — no fzf involved. The script
-# exits non-zero here because its final switch-client has no client to switch
-# to; creating and naming the session is what these assertions are about, so its
-# output is discarded rather than cluttering the report.
-(cd "$TEST_TMP" && tmux -L "$TMUX_SOCK" run-shell "$BIN/tmux-sessionizer '$first' >/dev/null 2>&1") 2>/dev/null
-sleep 1.5
-assert "the first project got a session named for its basename" t has-session -t "=api"
-
-(cd "$TEST_TMP" && tmux -L "$TMUX_SOCK" run-shell "$BIN/tmux-sessionizer '$second' >/dev/null 2>&1") 2>/dev/null
-sleep 1.5
-assert "the second got a distinct, parent-qualified session" t has-session -t "=learning_api"
-
-api_path="$(t list-sessions -F '#{session_name}	#{session_path}' |
-  awk -F'\t' '$1 == "api" { print $2 }')"
-assert "'api' still points at the FIRST project, not the second" [ "$api_path" = "$first" ]
-
-n_before="$(t list-sessions | wc -l | tr -d ' ')"
-(cd "$TEST_TMP" && tmux -L "$TMUX_SOCK" run-shell "$BIN/tmux-sessionizer '$first' >/dev/null 2>&1") 2>/dev/null
-sleep 1.5
-assert "re-picking the first reuses its session rather than duplicating it" \
-  [ "$(t list-sessions | wc -l | tr -d ' ')" = "$n_before" ]
+# tmux-sessionizer used to be tested here too. It has its own suite now —
+# test-sessionizer.sh — because the naming rules turned out to need a dozen
+# assertions rather than four, and two live defects came out of writing them.
 
 finish
