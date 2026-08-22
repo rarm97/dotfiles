@@ -147,6 +147,46 @@ assert "<leader>cf is mapped (conform)" contains "$out" "<leader>cf=Format buffe
 assert "<leader>ha is mapped (harpoon, via lazy keys)" contains "$out" "<leader>ha=Harpoon"
 
 echo
+echo "== the whole set of leader mappings, by name =="
+# The three assertions above name three keys. This names all of them, for the
+# same reason test-performance.sh asserts the eager plugin SET rather than a
+# startup time: a lazy `keys` entry that stops registering leaves a key that
+# silently does nothing, and checking three of thirty-four would not notice.
+#
+# Deliberately the exact set, not a minimum. A binding appearing is as worth
+# knowing as one vanishing — a plugin update that quietly claims <leader>x is
+# how you lose a mapping you use without ever being told.
+#
+# When this fails it is usually not a bug: you added or removed a mapping and
+# this is the line that records it. Update the list and the diff says which key
+# changed, which is the point.
+EXPECTED_LEADER_N="<leader>9s,<leader>9x,<leader>Q,<leader>Y,<leader>ca,<leader>cf,<leader>d,<leader>e,<leader>fb,<leader>fd,<leader>ff,<leader>fg,<leader>fh,<leader>fo,<leader>fr,<leader>fs,<leader>gs,<leader>h1,<leader>h2,<leader>h3,<leader>h4,<leader>ha,<leader>hh,<leader>hr,<leader>ld,<leader>lq,<leader>q,<leader>rn,<leader>s,<leader>tt,<leader>u,<leader>w,<leader>x,<leader>y"
+
+# The leader is a space, so a leader mapping is one whose lhs starts with one;
+# nvim reports the raw lhs, not the <leader> form.
+leader_out="$(nv "$SANDBOX/start.lua" \
+  'lua vim.wait(2500)' \
+  'lua local out = {} for _, m in ipairs(vim.api.nvim_get_keymap("n")) do if m.lhs:sub(1, 1) == " " then out[#out + 1] = "<leader>" .. m.lhs:sub(2) end end table.sort(out) print("LEADERN:" .. table.concat(out, ","))')"
+actual_leader="$(printf '%s' "$leader_out" | tr -d '\r' | grep -o 'LEADERN:[^[:space:]]*' | head -1 | sed 's/^LEADERN://')"
+
+if [ -z "$actual_leader" ]; then
+  no "could not read the keymap list out of nvim at all"
+else
+  printf '    %s leader mappings\n' "$(printf '%s' "$actual_leader" | tr ',' '\n' | grep -c .)"
+  if [ "$actual_leader" = "$EXPECTED_LEADER_N" ]; then
+    ok "the normal-mode leader mappings are exactly the expected set"
+  else
+    no "the normal-mode leader mappings have changed"
+    # Name the difference. A diff of two long comma-separated strings is not
+    # something anyone should have to read by eye at 2am.
+    printf '%s' "$EXPECTED_LEADER_N" | tr ',' '\n' | sort >"$TEST_TMP/want"
+    printf '%s' "$actual_leader" | tr ',' '\n' | sort >"$TEST_TMP/got"
+    comm -23 "$TEST_TMP/want" "$TEST_TMP/got" | sed 's/^/      MISSING now:  /'
+    comm -13 "$TEST_TMP/want" "$TEST_TMP/got" | sed 's/^/      NEW since:    /'
+  fi
+fi
+
+echo
 echo "== nothing leaked into the real config or repo =="
 assert "the scratch state dir was used" [ -d "$STATE" ]
 refute "no stray files were left in the sandbox's parent" [ -e "$TEST_TMP/shada" ]
