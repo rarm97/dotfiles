@@ -151,4 +151,25 @@ moved="$(with_pty_client base bash -c "
 assert "the attached client is switched to the picked project" contains "$moved" "widgets"
 refute "and is no longer on the session it started from" [ "$moved" = "base" ]
 
+# ---------------------------------------------------------------- vanished path
+
+echo
+echo "== a project that is no longer there =="
+# Reachable both ways: a path typed from memory, and an fzf pick from a listing
+# built moments earlier. tmux does NOT refuse this — it accepts -c with a
+# missing directory, records it as the session_path, and starts the shell
+# wherever it can. So without a check you get a session named after a project
+# that does not exist, apparently rooted in it, with a shell somewhere else.
+GONE="$TEST_TMP/vanished"
+mkdir -p "$GONE"
+rmdir "$GONE"
+n_before="$(n_sessions)"
+t run-shell "$BIN/tmux-sessionizer '$GONE' >$TEST_TMP/gone.out 2>&1; echo rc=\$? >>$TEST_TMP/gone.out"
+sleep 1.2
+out="$(cat "$TEST_TMP/gone.out" 2>/dev/null)"
+assert "it refuses rather than creating a session named after nothing" \
+  [ "$(n_sessions)" = "$n_before" ]
+assert "and exits non-zero" contains "$out" "rc=1"
+assert "naming the path it could not use" contains "$out" "vanished"
+
 finish

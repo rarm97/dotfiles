@@ -40,6 +40,19 @@ fi
 
 [[ -z "$selected" ]] && exit 0
 
+# A path that is no longer there. Reachable both ways: an argument typed from
+# memory, and an fzf pick from a listing built moments before.
+#
+# This is checked HERE rather than by testing new-session's exit status, because
+# new-session does not fail. tmux accepts -c with a missing directory, records
+# it as the session_path, and starts the shell wherever it can — so you get a
+# session named after a project that does not exist, apparently rooted in it,
+# with a shell somewhere else entirely. Verified against a real server.
+if [[ ! -d "$selected" ]]; then
+  echo "tmux-sessionizer: $selected is not a directory" >&2
+  exit 1
+fi
+
 # tmux uses '.' and ':' as target separators, so it will not store a session
 # name containing either — it substitutes underscores silently. Verified: a
 # session created as "a.b" is stored as "a_b", and creating "a:b" afterwards
@@ -83,6 +96,20 @@ while :; do
   session_name="$(tmux_name "$remaining")_${session_name}"
   remaining="$(dirname "$remaining")"
 done
+
+# The two tmux calls below are deliberately left unchecked, having been thought
+# about rather than skipped:
+#
+#   new-session -A   is the last command in its branch, so its status is the
+#                    script's status and tmux has already printed the reason. A
+#                    wrapper around it could only repeat what tmux said.
+#   switch-client    can only fail by leaving you where you already were, which
+#                    is the safe outcome and is visible immediately. There is
+#                    nothing better to do about it than exit non-zero, which is
+#                    what already happens.
+#
+# The failure that DID need handling was the missing directory above, and it is
+# not any of these three — it is the one where every call succeeds.
 
 # If not inside tmux, create or attach
 if [[ -z "${TMUX:-}" ]]; then
