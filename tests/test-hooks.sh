@@ -151,15 +151,36 @@ while IFS= read -r d; do
   done
 done <<<"$(printf '%s' "$PATH" | tr ':' '\n')"
 
+fail_count() { # $1... = env prefix; echoes check.sh's failure count
+  "$@" "$REPO_ROOT/check.sh" 2>&1 | sed 's/\x1b\[[0-9;]*m//g' |
+    sed -n 's/.*, \([0-9][0-9]*\) failure(s).*/\1/p' | tail -1
+}
+
 if [ -e "$shim/stylua" ]; then
   printf '  \033[33mSKIP\033[0m  could not build a PATH without stylua\n'
 else
-  out="$(cd "$REPO_ROOT" && PATH="$shim" ./check.sh 2>&1)"
-  rc=$?
-  assert "check.sh still passes with a formatter missing" [ "$rc" -eq 0 ]
-  assert "reporting it as a warning rather than a failure" \
+  # COMPARATIVE, not absolute. "check.sh passes with a formatter missing" is not
+  # testable on a runner, where the machine half cannot pass for reasons that
+  # have nothing to do with formatters — CI duly failed on exactly that. The
+  # invariant that actually matters holds anywhere: removing a formatter must
+  # add a WARNING and must not change the number of FAILURES.
+  base_fails="$(fail_count env)"
+  nostylua_fails="$(fail_count env PATH="$shim")"
+  # Stripped, because the markers are colour-wrapped: the literal "! formatter"
+  # never appears in the raw output, there is an escape sequence between them.
+  out="$(PATH="$shim" "$REPO_ROOT/check.sh" 2>&1 | sed 's/\x1b\[[0-9;]*m//g')"
+
+  printf '    failures with stylua: %s, without: %s\n' "${base_fails:-?}" "${nostylua_fails:-?}"
+  # One command, not two joined by &&: `assert desc [ a ] && [ b ]` asserts only
+  # the first test and then evaluates the second on its own, so half the
+  # condition silently does not participate.
+  same_fails() { [ -n "$1" ] && [ "$1" = "$2" ]; }
+  assert "removing a formatter does not add a failure" \
+    same_fails "$base_fails" "$nostylua_fails"
+  assert "it is reported as a warning instead" \
     contains "$out" "formatter stylua is not on PATH"
-  assert "and the warning is counted as a warning" contains "$out" "1 warning(s)"
+  assert "and carries the warning marker, not the failure one" \
+    contains "$out" "! formatter stylua"
 fi
 
 finish
