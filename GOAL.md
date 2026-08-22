@@ -1,130 +1,92 @@
-# Goal: verify the promise, not just the parts
+# Goal: the happy path is the one you actually use
 
-`restore.sh` has never been executed by a test. Not once. The word "restore"
-appears in `tests/` only in comments and in one assertion about where a symlink
-points.
+The last goal proved the tools refuse bad input correctly. Almost nothing
+proves they do the right thing on the ordinary path — the one taken every day,
+where a mistake is a wrong workspace rather than an error message.
 
-Everything built here exists to protect a restore: the guard stops a throwaway
-state becoming `last`, prune refuses to delete what `last` points at, promote
-puts `last` back after damage. All of it verified. The thing they protect —
-that restoring `last` actually reproduces your workspace — is assumed.
+Two targets. Verify every claim below before acting on it: several are
+inferences from reading the code, not observed failures, and at least one is
+probably wrong.
 
-`bootstrap.sh` is the same story: 7 of its 12 functions have never been
-executed. `stow_packages` is covered only because I went looking for the
-stow-folding bug. `install_homebrew_macos`, `brew_install_pkgs`,
-`install_rust`, `install_hooks`, `post_checks`, `need_cmd` and `is_macos` have
-never run under a test.
+## 1. tmux-sessionizer
 
-Four bodies of work. Take them in this order — the first is the one that
-matters.
+The weakest script in the repo, and the most used. It has three assertions and
+no error handling at all. Specifically:
 
-## 1. Save → restore round-trip
+- It is the only script here without `set -uo pipefail`. Establish whether
+  adding it is safe — `[[ -z "$selected" ]] && exit 0` and the unchecked tmux
+  calls may behave differently under `-u`. If it is not safe, say why in the
+  file rather than leaving the omission looking accidental.
 
-On a private socket with a private resurrect dir: build a known workspace
-(several sessions, distinct window names, distinct working directories, a
-long-running program in a pane), save it, destroy it entirely, restore, and
-assert the workspace came back. Session names, window names and indexes,
-per-window working directories, which pane was active, which window was active
-per session, and — since `@resurrect-capture-pane-contents` is on — that pane
-contents came back too.
+- **The collision fix may reproduce its own bug one level up.** When
+  `~/learning/api` and `~/coding_projects/api` collide, the name is qualified to
+  `learning_api`. Nothing checks whether THAT name is also taken by a different
+  path. If it is, the script switches to the wrong session — silently, which is
+  the exact defect the qualification was written to prevent. Verify this
+  reproduces before changing anything; if it does, fix it and assert it.
 
-Then the cases that actually matter here:
+- **A missing fzf is indistinguishable from a cancelled selection.** Both leave
+  `selected` empty and exit 0. Someone on a fresh machine gets a script that
+  appears to do nothing, successfully. Decide whether that is worth a check and
+  say so either way.
 
-- restore after a veto still gives the protected workspace, not the throwaway
-  one
-- restore after `promote` gives the promoted save
-- restore of a save whose `pane_contents.tar.gz` was stashed and put back by the
-  guard gives the right scrollback
+- Every tmux call is unchecked: `new-session -A`, `new-session -ds`,
+  `switch-client -t`. Work out which of those can actually fail in a way that
+  matters, and cover those. Do not add error handling to all three reflexively —
+  a check that can never fire is noise, and the file should say which ones you
+  ruled out and why.
 
-That last one closes the loop on the wrinkle the guard exists to handle, which
-has been reasoned about and never observed.
+- Session names replace `.` with `_` because tmux dislikes dots. Establish what
+  else tmux dislikes (`:` at least) and whether a directory name containing it
+  is reachable here. Test the answer, whatever it is.
 
-## 2. The pty harness and all 21 bindings
+- The suite cannot drive the fzf path or the switch-client path. `with_pty_client`
+  in tests/lib.sh exists precisely for this — a real client makes
+  `switch-client` meaningful, and fzf can be driven through a pty or replaced
+  with a stub on PATH. If one of them genuinely cannot be driven, record it as
+  NOT COVERED with the reason, in the file, the way the other suites now do.
 
-21 `bind` lines in `tmux.conf`; not one is exercised by pressing the key.
-Verifying a binding by running its command sequence from the CLI is a different
-path, and that gap produced three wrong answers in the last session, including
-nearly reporting a live bug in `prefix+Q` that did not exist.
+## 2. The restore round trip, across more than one shape
 
-`python3`'s `pty` module is the reliable route; `script -q /dev/null` already
-failed here once. Whichever you pick, prove it attaches — `list-clients` must
-show 1 — before building anything on top of it.
+test-restore.sh proves the promise once: build a workspace, save it, destroy it,
+restore it, check it came back. That is the right test. It runs against a single
+shape.
 
-Priority order within this:
+Extend it to the shapes a real session actually takes, and make each one prove
+something the others do not:
 
-1. `prefix+Q` and `prefix+q` — they destroy things
-2. `prefix+s` and `prefix+M-s` — they must not lie about what happened
-3. `prefix+BSpace` — it types into whatever owns the pane
-4. the rest
+- more than one session, restored together
+- a session with several windows and split panes, with the layout checked
+- window and session NAMES preserved, not just counts
+- panes whose working directory is not `$HOME`
+- a pane running something other than a shell when the save was taken
+- restore into a server that already has sessions, rather than an empty one
 
-## 3. Bootstrap's uncovered path
+The last is the one most likely to be broken and least likely to be noticed.
 
-Do **not** run brew, rustup or the Homebrew installer for real. Stub them on
-PATH and assert the script does the right things in the right order:
+## Standing constraints
 
-- it fails fast on a missing command
-- it is idempotent on a second run
-- a failing cask warns rather than aborting the whole bootstrap
-- `install_rust` is a no-op when cargo is already present
-- `install_hooks` sets `core.hooksPath` locally and not globally
-- `post_checks` actually fails when a required path is missing
-
-A fresh machine is where the expensive failures live and it is still mostly
-unexercised.
-
-## 4. Neovim at runtime
-
-Today the checks prove every lua file parses. They do not prove nvim works.
-With a scratch XDG data dir so the real plugin tree is untouched:
-
-- does it start without errors
-- does lazy load the expected plugins
-- does an LSP client attach to a real file of a configured filetype
-- does format-on-save actually reformat
-- do the leader mappings resolve to what the config claims
-
-If something needs network and cannot run offline, say so rather than skipping
-silently.
-
-## Operating rules, since this runs unattended
-
-- **Never** touch the live tmux server or `~/.local/share/tmux/resurrect`.
-  Private sockets named `dotfiles-test-*`, scratch dirs, fake `$HOME`. The
-  existing `require_private_socket` guard is the pattern; extend it, do not work
-  around it.
-- **Do not spawn subagents against this machine.** Three separate incidents in
-  the last session, one of which killed a live session and lost four windows of
-  work. Work solo.
-- Commit and push incrementally, one coherent change at a time, so a night's
-  work is not one unreviewable diff and so progress survives an interruption.
-- CI must be green at every push. It is the only verification that does not
-  happen on this laptop.
-- A flaky test is worse than no test, because people learn to re-run it. If a
-  thing cannot be driven reliably, write down which and why, in the suite, and
-  move on. Do not chase it into the ground and do not fake it.
+- **No subagents against this machine.** Three separate incidents damaged the
+  live tmux server, one of them killing a five-window session. Any work that
+  touches tmux runs against a private socket in this session, or not at all.
+- Plain shell. No new plugin dependencies.
+- Explain the mechanism in the file. I want to be able to modify whatever you
+  write without asking you what it does.
+- **Mutation-check every assertion.** Introduce the defect it claims to catch
+  and prove it fails. An assertion that cannot fail is worse than no assertion,
+  and this repo has now produced five of them — including one that passed
+  because `[ -e ]` follows a dangling symlink and reported the file it was
+  looking at as absent.
+- Verify the mutation harness itself. It has silently produced clean-looking
+  results twice: once counting a nonexistent suite file as a kill, once running
+  under zsh, which does not word-split, so every mutant looked caught.
+- Commit as you go, with the reasoning in the message. Push and confirm CI green
+  before moving to the next piece.
+- If a claim above turns out to be wrong, say so plainly and move on. Finding
+  that the collision bug does not reproduce is a real result, not a failure.
 
 ## Done means
 
-- restore is verified end to end
-- every binding is either tested as a keypress or documented as undrivable with
-  a reason
-- bootstrap's install path is exercised against stubs
-- nvim is proven to work rather than merely parse
-- CI is green
-
-The rule, unchanged: **if it can be wrong without saying so, it isn't
-finished.** What this goal adds: a promise nobody has ever checked is the
-largest way of being wrong without saying so.
-
-## Two honest notes
-
-**Item 1 is the one I would be most uncomfortable shipping without.** The rest
-is thoroughness; that one is a guarantee this project has been asserting for a
-week without evidence. If the night goes badly and only one thing lands, it
-should be that.
-
-**Item 4 may partly defeat me.** Driving nvim headlessly to the point where an
-LSP client actually attaches means mason binaries, a real file, and async
-startup — it is flaky by nature. Better to say now that it might end as
-"started clean, plugins loaded, LSP attach proved undrivable offline" than to
-produce a green run that quietly checked less than it looks like.
+Both scripts have assertions that fail when the behaviour they describe is
+broken, every branch is taken or documented as unreachable with a reason, the
+working tree is clean, and CI is green.
