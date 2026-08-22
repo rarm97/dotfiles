@@ -178,6 +178,28 @@ rc=0
 (cd "$WORK" && ./check.sh --repo-only >/dev/null 2>&1) || rc=$?
 assert "a repo with a defect exits non-zero, so a hook or CI can act on it" [ "$rc" -ne 0 ]
 
+echo
+echo "== status-right must be set before tpm runs =="
+# Continuum appends #(continuum_save.sh) to status-right when tpm loads it.
+# Setting status-right after that point overwrites the addition and every
+# automatic save stops, with no error and no missing file — the exact shape of
+# failure this repo exists to catch.
+reset_repo
+python3 - "$WORK/tmux/.config/tmux/tmux.conf" <<'MOVE'
+import sys
+p = sys.argv[1]
+lines = open(p).read().splitlines(True)
+sr = [i for i, l in enumerate(lines) if l.lstrip().startswith("set ") and "status-right" in l]
+tpm = [i for i, l in enumerate(lines) if l.lstrip().startswith("run ") and "tpm" in l]
+line = lines.pop(sr[0])
+lines.insert(tpm[-1], line)  # now below the tpm run line
+open(p, "w").write("".join(lines))
+MOVE
+out="$(run_check)"
+refute "moving status-right below tpm is caught" contains "$out" "0 failure(s)"
+assert "and the message names the ordering, not just a missing setting" \
+  contains "$out" "overwrites continuum"
+
 # ------------------------------------------------------- the checks themselves
 
 echo

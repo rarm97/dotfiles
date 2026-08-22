@@ -66,6 +66,23 @@ else
   bad "terminal-features lacks usstyle — nvim's diagnostic undercurls are stripped"
 fi
 
+# Continuum has no timer. It appends `#(continuum_save.sh)` to status-right and
+# relies on tmux running that command every time it draws the status line. So if
+# `set -g status-right` ever moves BELOW the line that runs tpm, it overwrites
+# continuum's addition, every automatic save stops, and there is no error and no
+# missing file to notice — the save directory just quietly stops growing.
+#
+# Line numbers, because ordering is the whole point.
+sr_line="$(grep -n '^[[:space:]]*set .*status-right' tmux/.config/tmux/tmux.conf | head -1 | cut -d: -f1)"
+tpm_line="$(grep -n "^[[:space:]]*run .*tpm" tmux/.config/tmux/tmux.conf | tail -1 | cut -d: -f1)"
+if [ -z "$sr_line" ] || [ -z "$tpm_line" ]; then
+  meh "could not locate both status-right and the tpm run line; skipping the ordering check"
+elif [ "$sr_line" -lt "$tpm_line" ]; then
+  ok "status-right is set before tpm runs, so continuum's auto-save survives"
+else
+  bad "status-right (line $sr_line) is set AFTER tpm (line $tpm_line) — it overwrites continuum's #() and auto-save silently stops"
+fi
+
 section "Shell"
 if command -v zsh >/dev/null 2>&1; then
   if zsh -n zsh/.zshrc 2>/dev/null; then ok ".zshrc parses"; else bad ".zshrc has a syntax error"; fi
