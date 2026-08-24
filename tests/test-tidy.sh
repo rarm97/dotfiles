@@ -155,7 +155,7 @@ still_there=0
 [ -f "$REPO/tmp/99-undeletable" ] && still_there=1
 chmod u+w "$REPO/tmp"
 if [ "$still_there" -eq 1 ]; then
-  # SCRATCH_FIND runs `find .`, so the report carries a RELATIVE path. Checking
+  # scratch_files() runs `find .`, so the report carries a RELATIVE path. Checking
   # for the absolute one would never match and the assertion would pass without
   # testing anything.
   refute "a file that could NOT be deleted is not reported as removed" \

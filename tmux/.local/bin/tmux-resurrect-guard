@@ -90,10 +90,22 @@
 #   protected. To close that, a veto stashes a copy of the archive, and the
 #   post-save-all hook — which runs last, after the rewrite — puts it back.
 #
-# FILES  (all live in the resurrect dir, alongside the saves)
-#   guard.log                     one decision per line; trimmed to 200 lines
-#   .guard-state                  vetoed window count, for rule 2's second strike
-#   .guard-pane-contents.tar.gz   stashed archive; its existence is the marker
+# FILES
+#   In the resurrect dir, alongside the saves:
+#     guard.log                     one decision per line; trimmed to 200 lines
+#     .guard-state                  vetoed window count, for rule 2's second strike
+#     .guard-pane-contents.tar.gz   the stashed archive itself
+#   In $TMPDIR:
+#     tmux-resurrect-guard-<uid>.pending   what --post-save-all keys off: the
+#                                          stash path on line 1, the archive it
+#                                          belongs to on line 2
+#
+#   This table used to say the stash's own existence was the marker, and that
+#   everything lived in the resurrect dir. Neither was true by the time anyone
+#   read it: --post-save-all is called with no arguments and cannot find the
+#   resurrect dir without duplicating resurrect's own resurrect_dir(), so a veto
+#   writes both absolute paths into the .pending file instead. The reasoning is
+#   spelled out where that path is defined.
 #
 # USAGE
 #   tmux-resurrect-guard <candidate-save-file>   decide on a save (post-save-layout)

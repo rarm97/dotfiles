@@ -182,6 +182,37 @@ mutate_machine "hooks pointing nowhere is caught" "hooks installed" \
 mutate_machine "a git identity that disagrees with the repo is caught" "user.email agrees" \
   git config --local user.email someone-else@example.com
 
+# ------------------------------------------- constants written down more than once
+
+# The pair the comments named: the guard's floor and prune's idea of degenerate.
+# shellcheck disable=SC2016  # ${...} and $logfile are text in the target file
+mutate "the guard's floor drifting from prune's is caught" "minimum window count" \
+  sed -i '' 's/^MIN_WINDOWS="${MIN_WINDOWS:-2}"/MIN_WINDOWS="${MIN_WINDOWS:-3}"/' tmux/.local/bin/tmux-resurrect-saves
+
+# The other pair: resurrect's own backup deletion against prune's retention.
+mutate "the two retention windows drifting apart is caught" "retention window in days" \
+  sed -i '' "s/@resurrect-delete-backup-after '90'/@resurrect-delete-backup-after '60'/" tmux/.config/tmux/tmux.conf
+
+# A default documented in prose is a third copy of the number.
+mutate "the guard's header disagreeing with its own default is caught" "minimum window count" \
+  sed -i '' 's/rule 1 floor       (default 2)/rule 1 floor       (default 3)/' tmux/.local/bin/tmux-resurrect-guard
+
+mutate "the guard's fallback drifting from tmux.conf is caught" "collapse percentage" \
+  sed -i '' "s/tmux_opt '@resurrect-guard-collapse-pct' '50'/tmux_opt '@resurrect-guard-collapse-pct' '40'/" tmux/.local/bin/tmux-resurrect-guard
+
+# shellcheck disable=SC2016  # ${...} and $logfile are text in the target file
+mutate "a log trim that no longer matches its own header is caught" "guard.log is trimmed to" \
+  sed -i '' 's/tail -n 200 "$logfile"/tail -n 100 "$logfile"/' tmux/.local/bin/tmux-resurrect-guard
+
+# A comment quoting another file is a copy, and this proves the copy is read.
+mutate "a comment quoting a tmux.conf line that changed is caught" "line a comment quotes" \
+  sed -i '' "s|@resurrect-hook-post-save-all '~/.local/bin/tmux-resurrect-guard|@resurrect-hook-post-save-all '~/.local/bin/tmux-guard|" tmux/.config/tmux/tmux.conf
+
+# And the anti-vacuity guard: a value that cannot be read must fail, not compare
+# equal to the nothing beside it.
+mutate "a constant that cannot be read at all fails rather than comparing empty" "minimum window count" \
+  sed -i '' '/^MIN_WINDOWS=/d' tmux/.local/bin/tmux-resurrect-saves
+
 # ---------------------------------------------------- what the repo says of itself
 
 # A hook and the make target that describes it are two copies of one command.

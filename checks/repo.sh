@@ -12,6 +12,58 @@ REPO="$PWD"
 # shellcheck source=/dev/null
 . "$REPO/checks/lib.sh"
 
+# ---------------------------------------------------------------- readers
+#
+# Values live in the file that owns them; these read them back out. An extractor
+# that quietly returns nothing turns every comparison below into "" = "", which
+# passes while asserting nothing — the shape of the seven assertions in this
+# repo that turned out to be incapable of failing. Every caller rejects an empty
+# result rather than comparing it.
+
+GUARD="tmux/.local/bin/tmux-resurrect-guard"
+SAVES="tmux/.local/bin/tmux-resurrect-saves"
+TMUXCONF="tmux/.config/tmux/tmux.conf"
+
+# The value tmux.conf sets an option to:  set -g @option 'value'
+tmux_setting() { # $1 = option name
+  local line
+  line="$(grep -m1 -E "^[[:space:]]*set .*$1 " "$TMUXCONF")"
+  line="${line#*\'}"
+  printf '%s' "${line%%\'*}"
+}
+
+# The V in a shell script's  NAME="${NAME:-V}"
+sh_default() { # $1 = file, $2 = variable
+  local line
+  line="$(grep -m1 -E "^$2=" "$1")"
+  case "$line" in
+    *":-"*)
+      line="${line#*:-}"
+      printf '%s' "${line%%\}*}"
+      ;;
+  esac
+}
+
+# The guard's own fallback:  tmux_opt '@option' 'default'
+guard_default() { # $1 = option name
+  local line
+  line="$(grep -m1 -F "tmux_opt '$1'" "$GUARD")"
+  line="${line#*\' \'}"
+  printf '%s' "${line%%\'*}"
+}
+
+# What the guard's header says that fallback is:  @option  ...  (default V)
+guard_doc_default() { # $1 = option name
+  local line
+  line="$(grep -m1 -E "^#[[:space:]]+$1[[:space:]]" "$GUARD")"
+  case "$line" in
+    *"(default "*)
+      line="${line#*\(default }"
+      printf '%s' "${line%%\)*}"
+      ;;
+  esac
+}
+
 section "Lua config"
 # These generalise past whatever anyone has read: a syntax error or a deprecated
 # call in a plugin file nobody has opened shows up as "nvim starts a bit oddly".
@@ -94,6 +146,107 @@ elif [ "$sr_line" -lt "$tpm_line" ]; then
   ok "status-right is set before tpm runs, so continuum's auto-save survives"
 else
   bad "status-right (line $sr_line) is set AFTER tpm (line $tpm_line) — it overwrites continuum's #() and auto-save silently stops"
+fi
+
+section "Constants kept in step"
+# Two pairs of numbers were held together by a comment asking a person to
+# remember. tmux-resurrect-saves says "Keep in step with
+# @resurrect-guard-min-windows in tmux.conf"; tmux.conf says its retention
+# window is "Kept in step with tmux-resurrect-saves' KEEP_DAILY_DAYS". Both
+# pairs agreed. Nothing made them.
+#
+# WHAT DIVERGENCE COSTS, which is why these are asserted rather than trusted.
+# Move the guard's floor without the script's and the guard vetoes at a
+# threshold prune does not share: prune then keeps saves the guard will never
+# let become `last`, and deletes ones it would have. Move one retention window
+# and resurrect's own backup deletion fights prune's policy. Either way the
+# first symptom is a save that is gone when you need it, which is the worst
+# imaginable moment to discover a comment went stale.
+#
+# The guard's own defaults are in here too. They only take effect when tmux.conf
+# does not set the option — which is exactly when a divergence would be silent,
+# because nothing looks wrong until the line is deleted. Its header documents
+# each default in prose as well, so every one of these numbers is written down
+# three or four times.
+agree() { # $1 = what the value is, $2... = "where=value"
+  local what="$1"
+  shift
+  local n=$#
+  local first="" first_where="" pair where value broken=0
+  for pair in "$@"; do
+    where="${pair%%=*}"
+    value="${pair#*=}"
+    case "$value" in
+      '' | *[[:space:]]*)
+        bad "could not read $what out of $where — the comparison would be vacuous"
+        broken=1
+        continue
+        ;;
+    esac
+    if [ -z "$first_where" ]; then
+      first="$value"
+      first_where="$where"
+    elif [ "$value" != "$first" ]; then
+      bad "$what: $first_where says '$first' but $where says '$value' — nothing but a comment held those together"
+      broken=1
+    fi
+  done
+  [ "$broken" -eq 0 ] && ok "$what is '$first' in all $n places that write it down"
+}
+
+agree "the guard's minimum window count" \
+  "tmux.conf=$(tmux_setting @resurrect-guard-min-windows)" \
+  "the guard's own default=$(guard_default @resurrect-guard-min-windows)" \
+  "the guard's header=$(guard_doc_default @resurrect-guard-min-windows)" \
+  "tmux-resurrect-saves MIN_WINDOWS=$(sh_default "$SAVES" MIN_WINDOWS)"
+
+agree "the retention window in days" \
+  "tmux.conf @resurrect-delete-backup-after=$(tmux_setting @resurrect-delete-backup-after)" \
+  "tmux-resurrect-saves KEEP_DAILY_DAYS=$(sh_default "$SAVES" KEEP_DAILY_DAYS)"
+
+agree "the guard's collapse percentage" \
+  "tmux.conf=$(tmux_setting @resurrect-guard-collapse-pct)" \
+  "the guard's own default=$(guard_default @resurrect-guard-collapse-pct)" \
+  "the guard's header=$(guard_doc_default @resurrect-guard-collapse-pct)"
+
+agree "whether the guard is on by default" \
+  "tmux.conf=$(tmux_setting @resurrect-guard)" \
+  "the guard's own default=$(guard_default @resurrect-guard)" \
+  "the guard's header=$(guard_doc_default @resurrect-guard)"
+
+agree "whether the guard announces its vetoes" \
+  "tmux.conf=$(tmux_setting @resurrect-guard-notify)" \
+  "the guard's own default=$(guard_default @resurrect-guard-notify)" \
+  "the guard's header=$(guard_doc_default @resurrect-guard-notify)"
+
+# Same shape, inside one file: the header says how far guard.log is trimmed, and
+# two lines of code do the trimming. A header describing its own file is no more
+# self-maintaining than one describing a different file.
+# shellcheck disable=SC2016  # $lines and $logfile are text in the guard, not here
+agree "how many lines guard.log is trimmed to" \
+  "the guard's header=$(sed -n 's/.*trimmed to \([0-9][0-9]*\) lines.*/\1/p' "$GUARD" | head -1)" \
+  "its length test=$(sed -n 's/.*"\$lines" -gt \([0-9][0-9]*\).*/\1/p' "$GUARD" | head -1)" \
+  "the tail that trims it=$(sed -n 's/.*tail -n \([0-9][0-9]*\) "\$logfile".*/\1/p' "$GUARD" | head -1)"
+
+# A comment that quotes a line of another file is a copy, and copies drift. The
+# guard's header quotes the two tmux.conf lines that wire it up — the most
+# useful thing in that header, and the easiest to leave behind when the wiring
+# changes.
+quoted_bad=0
+quoted_seen=0
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  quoted_seen=$((quoted_seen + 1))
+  grep -qxF "$line" "$TMUXCONF" || {
+    bad "a comment quotes \"$line\" as tmux.conf's wiring, and tmux.conf has no such line"
+    quoted_bad=$((quoted_bad + 1))
+  }
+done < <(git ls-files | grep -vxF "$TMUXCONF" |
+  xargs grep -h -E '^#[[:space:]]+set(-option)? -g @' 2>/dev/null | sed 's/^#[[:space:]]*//')
+if [ "$quoted_seen" -eq 0 ]; then
+  meh "no comment quotes a tmux.conf line, so there was nothing to compare"
+elif [ "$quoted_bad" -eq 0 ]; then
+  ok "every tmux.conf line a comment quotes ($quoted_seen of them) is really in tmux.conf"
 fi
 
 section "Shell"
@@ -260,26 +413,6 @@ section "README"
 # Everything below is mechanical. The README may name a target, a file, a
 # binding or a figure only when the thing it names is really here.
 
-# Values live in the file that owns them; these two pull them out. An extractor
-# that quietly returns nothing turns every comparison below into "" = "", which
-# passes while asserting nothing — the shape of the seven assertions in this
-# repo that turned out to be incapable of failing. Each caller checks for empty.
-tmux_setting() { # $1 = option name, e.g. @continuum-save-interval
-  local line
-  line="$(grep -m1 -E "^[[:space:]]*set .*$1 " tmux/.config/tmux/tmux.conf)"
-  line="${line#*\'}"
-  printf '%s' "${line%%\'*}"
-}
-sh_default() { # $1 = file, $2 = variable — the V in  NAME="${NAME:-V}"
-  local line
-  line="$(grep -m1 -E "^$2=" "$1")"
-  case "$line" in
-    *":-"*)
-      line="${line#*:-}"
-      printf '%s' "${line%%\}*}"
-      ;;
-  esac
-}
 # The body of one "## " section of the README, so a table can be read without
 # matching rows from a different table.
 readme_section() { # $1 = heading text, without the "## "

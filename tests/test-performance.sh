@@ -122,17 +122,37 @@ echo "== which plugins load eagerly, by name =="
 # is what was actually wanted.
 #
 # rose-pine must be eager — a colorscheme that loads late means an unstyled
-# flash. lazy.nvim is the loader itself. nvim-cmp and its two sources, and 99,
-# declare no lazy trigger; that is a choice worth seeing rather than a bug, and
-# if it changes this assertion says so.
+# flash. lazy.nvim is the loader itself. 99 declares no lazy trigger, so it
+# loads at start.
+#
+# nvim-cmp is the interesting one, and this comment had it wrong for as long as
+# it existed: cmp DOES declare a trigger (event = "InsertEnter"). It is eager
+# because 99's config calls require("cmp") while it loads, and lazy honours a
+# require by loading that plugin there and then; cmp-buffer and cmp-path follow
+# as its dependencies. lazy records the reason, which is how that was settled
+# rather than guessed:
+#
+#   require("lazy.core.config").plugins["nvim-cmp"]._.loaded
+#     -> { plugin = "99", require = "cmp" }
+#
+# So the failure branch prints those reasons. "The eager set changed" on its own
+# sends you looking through six plugin specs for a trigger that may not be the
+# thing that changed at all.
 EXPECTED_EAGER="99 cmp-buffer cmp-path lazy.nvim nvim-cmp rose-pine"
 if command -v nvim >/dev/null 2>&1; then
   actual="$(nvim --headless \
     -c 'lua local p = require("lazy.core.config").plugins; local n = {}; for k, v in pairs(p) do if v._.loaded then n[#n + 1] = k end end; table.sort(n); print("EAGER:" .. table.concat(n, " "))' \
     -c qa 2>&1 | grep -ao 'EAGER:.*' | head -1 | cut -d: -f2-)"
   printf '    %s\n' "${actual:-(none reported)}"
-  assert "the set of eagerly loaded plugins is exactly what is expected" \
-    [ "$actual" = "$EXPECTED_EAGER" ]
+  if [ "$actual" = "$EXPECTED_EAGER" ]; then
+    ok "the set of eagerly loaded plugins is exactly what is expected"
+  else
+    no "the set of eagerly loaded plugins has changed"
+    echo "    why each of them is loaded:"
+    nvim --headless \
+      -c 'lua local p = require("lazy.core.config").plugins; local o = {}; for k, v in pairs(p) do if v._.loaded then o[#o + 1] = k .. " " .. vim.inspect(v._.loaded):gsub("%s+", " ") end end; table.sort(o); for _, l in ipairs(o) do print("WHY " .. l) end' \
+      -c qa 2>&1 | grep -a '^WHY ' | sed 's/^WHY /      /'
+  fi
 fi
 
 echo
