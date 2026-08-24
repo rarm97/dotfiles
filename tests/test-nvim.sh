@@ -9,7 +9,7 @@
 # XDG_STATE_HOME is redirected so shada, undo history and lsp.log land in a
 # scratch dir rather than the real one. XDG_DATA_HOME is NOT redirected: the
 # plugins are already installed there, and pointing it elsewhere would make lazy
-# clone all 31 of them over the network on every run.
+# clone every one of them over the network on every run.
 #
 # Invocation matters. `nvim -l script.lua` does NOT put the config's runtime
 # path in scope — require("lazy...") fails outright and an LSP probe times out
@@ -65,8 +65,11 @@ out="$(nv "$SANDBOX/start.lua" \
   'lua local p = require("lazy.core.config").plugins; local n = 0; for _, x in pairs(p) do if x._.loaded then n = n + 1 end end; print("EAGER=" .. n)')"
 eager="$(printf '%s' "$out" | sed -n 's/.*EAGER=\([0-9]*\).*/\1/p')"
 assert "some plugins load eagerly, as the colorscheme must" [ "${eager:-0}" -ge 1 ]
+# :-0 rather than a remembered plugin count: if the count could not be read the
+# assertion above has already failed, and comparing against a number written
+# here would let this one pass on a guess.
 assert "but most are deferred — an eager everything would be a config bug" \
-  [ "${eager:-99}" -lt "${plugin_count:-31}" ]
+  [ "${eager:-99}" -lt "${plugin_count:-0}" ]
 
 echo
 echo "== an LSP client actually attaches to a real file =="

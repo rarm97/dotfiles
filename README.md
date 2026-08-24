@@ -145,7 +145,8 @@ job. `tests/test-performance.sh` times the run where it actually runs and fails
 against a ceiling instead. `checks/repo.sh` enforces the rule: the only figures
 allowed here are ones it can read back out of the config that owns them.
 
-GitHub Actions runs `make check-repo` and `make test` on every push, so
+GitHub Actions runs `make lint`, `make check-repo` and `make test` on every
+push, so
 `--no-verify`, a clone that never ran `make hooks`, and the suites pre-push
 skips are all covered. `bootstrap.sh` installs the hooks on a fresh machine, and
 `check` fails if they are missing. Bypass a single run with

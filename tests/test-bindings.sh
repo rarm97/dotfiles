@@ -270,11 +270,14 @@ echo "== every binding is either pressed here or explained =="
 #   copy-mode-vi v / y  need copy-mode plus a selection plus a clipboard
 undriven="w r R C f S H C-a v y"
 driven="Q q s M-s BSpace c h l L j k"
-total="$(grep -cE '^bind ' "$CONF")"
-covered="$(printf '%s %s' "$driven" "$undriven" | wc -w | tr -d ' ')"
-assert "every binding in tmux.conf is accounted for" [ "$covered" -eq "$total" ]
-printf '    %s pressed, %s documented as not driven, %s total\n' \
+# That these two lists between them cover every key tmux.conf binds is asserted
+# in checks/repo.sh, which reads them out of here and compares the SETS. It was
+# asserted here and compared the COUNTS — eleven plus ten against twenty-one
+# `bind` lines — and a count cannot tell `bind w` being renamed to `bind W` from
+# nothing having happened. It is a fact about two files, so it belongs in a
+# check that runs on every commit rather than in a suite that needs a terminal.
+printf '    %s pressed here, %s documented as not driven (checks/repo.sh asserts that is all of them)\n' \
   "$(printf '%s' "$driven" | wc -w | tr -d ' ')" \
-  "$(printf '%s' "$undriven" | wc -w | tr -d ' ')" "$total"
+  "$(printf '%s' "$undriven" | wc -w | tr -d ' ')"
 
 finish

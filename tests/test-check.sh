@@ -190,6 +190,21 @@ mutate "a shell script with no shebang is caught, because lint would skip it" "d
 mutate "CI no longer running the linters is caught" "CI runs 'make lint'" \
   sed -i '' 's/^        run: make lint$/        run: true/' .github/workflows/ci.yml
 
+# ------------------------------------- assertions that could pass while being wrong
+
+# The old version of this compared COUNTS: renaming a binding kept the total at
+# twenty-one and passed.
+mutate "a binding renamed out of test-bindings.sh's accounting is caught" "pressed or explained" \
+  sed -i '' 's/^bind w choose-tree/bind W choose-tree/' tmux/.config/tmux/tmux.conf
+
+mutate "a stow package list that disagrees with the others is caught" "set of stow packages" \
+  sed -i '' 's/local packages=(nvim wezterm tmux zsh home starship)/local packages=(nvim wezterm tmux zsh home)/' bootstrap.sh
+
+# make accepts any number of .PHONY lines; reading only the first left
+# everything on a second one unchecked.
+mutate "a recipeless target on a SECOND .PHONY line is caught" "has a recipe" \
+  bash -c 'printf "\n.PHONY: ghost\n" >> Makefile'
+
 # ------------------------------------------- constants written down more than once
 
 # The pair the comments named: the guard's floor and prune's idea of degenerate.
@@ -305,6 +320,18 @@ sed -i '' "s/@continuum-save-interval '15'/@continuum-save-interval '20'/" \
 out="$(run_check)"
 refute "changing the interval without the README is caught" contains "$out" "0 failure(s)"
 assert "and the message names the figure that stopped matching" contains "$out" "15 minutes"
+
+echo
+echo "== a filetype's second formatter is checked too =="
+# The extraction read one formatter per filetype. Every entry has exactly one
+# today, so nothing was being missed — but a fallback, which is the ordinary way
+# conform is configured, would have gone unchecked from the moment it was added.
+reset_repo
+sed -i '' 's/lua = { "stylua" }/lua = { "stylua", "not-a-real-formatter" }/' \
+  "$WORK/nvim/.config/nvim/lua/rich/plugins/conform.lua"
+out="$(run_check_full | sed 's/\x1b\[[0-9;]*m//g')"
+assert "the second formatter in a filetype's list is checked as well as the first" \
+  contains "$out" "formatter not-a-real-formatter is not on PATH"
 
 echo
 echo "== naming both Homebrew prefixes means only one has to exist =="

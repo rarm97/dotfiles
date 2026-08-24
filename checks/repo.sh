@@ -52,6 +52,22 @@ guard_default() { # $1 = option name
   printf '%s' "${line%%\'*}"
 }
 
+# Every key tmux.conf binds. tmux's grammar is `bind [-flags] [-T table] KEY
+# command`, so the key is the first argument that is neither a flag nor a flag's
+# argument.
+tmux_bound_keys() {
+  awk '
+    /^[[:space:]]*bind(-key)?[[:space:]]/ {
+      for (i = 2; i <= NF; i++) {
+        if ($i == "-T" || $i == "-t" || $i == "-N") { i++; continue }
+        if ($i ~ /^-/) { continue }
+        print $i
+        break
+      }
+    }
+  ' "$TMUXCONF"
+}
+
 # What the guard's header says that fallback is:  @option  ...  (default V)
 guard_doc_default() { # $1 = option name
   local line
@@ -161,6 +177,31 @@ else
   bad "status-right (line $sr_line) is set AFTER tpm (line $tpm_line) — it overwrites continuum's #() and auto-save silently stops"
 fi
 
+# Every key tmux.conf binds is either pressed by tests/test-bindings.sh or
+# listed there as deliberately not driven, with a reason.
+#
+# That accounting lived in the suite and compared COUNTS: eleven driven plus ten
+# undriven against twenty-one `bind` lines. Rename `bind w` to `bind W` and both
+# numbers are still twenty-one, so a key could drop out of the accounting and
+# come back as a different one without a word. Compare the sets — and do it
+# here, because it is a fact about two files and needs no terminal to find out.
+driven="$(sed -n 's/^driven="\(.*\)"$/\1/p' tests/test-bindings.sh)"
+undriven="$(sed -n 's/^undriven="\(.*\)"$/\1/p' tests/test-bindings.sh)"
+bound_keys="$(tmux_bound_keys | sort -u)"
+if [ -z "$driven" ] || [ -z "$undriven" ] || [ -z "$bound_keys" ]; then
+  bad "could not read the driven/undriven lists or tmux.conf's bindings — the comparison would be vacuous"
+else
+  accounted="$(printf '%s %s' "$driven" "$undriven" | tr ' ' '\n' | grep -v '^$' | sort -u)"
+  unaccounted="$(comm -23 <(printf '%s\n' "$bound_keys") <(printf '%s\n' "$accounted") | tr '\n' ' ')"
+  phantom="$(comm -13 <(printf '%s\n' "$bound_keys") <(printf '%s\n' "$accounted") | tr '\n' ' ')"
+  if [ -z "$unaccounted" ] && [ -z "$phantom" ]; then
+    ok "every key tmux.conf binds is pressed or explained in test-bindings.sh"
+  else
+    [ -n "$unaccounted" ] && bad "tmux.conf binds ${unaccounted}— test-bindings.sh neither presses nor explains them"
+    [ -n "$phantom" ] && bad "test-bindings.sh accounts for ${phantom}— which tmux.conf does not bind"
+  fi
+fi
+
 section "Constants kept in step"
 # Two pairs of numbers were held together by a comment asking a person to
 # remember. tmux-resurrect-saves says "Keep in step with
@@ -241,6 +282,33 @@ agree "how many lines guard.log is trimmed to" \
   "its length test=$(sed -n 's/.*"\$lines" -gt \([0-9][0-9]*\).*/\1/p' "$GUARD" | head -1)" \
   "the tail that trims it=$(sed -n 's/.*tail -n \([0-9][0-9]*\) "\$logfile".*/\1/p' "$GUARD" | head -1)"
 
+# The stow package set is written by hand in four places: `make stow`, `make
+# unstow`, bootstrap.sh's array, and the list check.sh dry-runs to decide
+# whether everything is stowed. Add a package and miss the last one and "every
+# package is stowed" quietly stops covering it — so new files in that package
+# never go live and nothing anywhere says so.
+#
+# git/gitconfig is dropped from each list before comparing: three of the four
+# add it conditionally on which directory exists, and that difference is the
+# design rather than a drift.
+pkg_set() { # $1 = space-separated package names
+  printf '%s' "$1" | tr ' ' '\n' | grep -v '^$' | grep -vE '^(git|gitconfig)$' | sort -u | paste -sd, -
+}
+pkg_sources=(
+  "make stow=$(pkg_set "$(sed -n '/^stow:/,/^$/p' Makefile | grep -m1 'PKGS=' | sed 's/.*PKGS="\([^"]*\)".*/\1/')")"
+  "make unstow=$(pkg_set "$(sed -n '/^unstow:/,/^$/p' Makefile | grep -m1 'PKGS=' | sed 's/.*PKGS="\([^"]*\)".*/\1/')")"
+  "bootstrap.sh=$(pkg_set "$(sed -n 's/.*local packages=(\([^)]*\)).*/\1/p' bootstrap.sh)")"
+)
+# The machine half may legitimately be absent — --repo-only has to work without
+# it, which is what lets CI run this half alone. Warn rather than skip quietly.
+if [ -f checks/machine.sh ]; then
+  # shellcheck disable=SC2016  # $HOME below is text inside machine.sh, not here
+  pkg_sources+=("checks/machine.sh=$(pkg_set "$(sed -n 's/.*stow -n -t "$HOME" \([a-z ]*\)2>&1.*/\1/p' checks/machine.sh)")")
+else
+  meh "checks/machine.sh is not here, so its copy of the stow list went unchecked"
+fi
+agree "the set of stow packages" "${pkg_sources[@]}"
+
 # A comment that quotes a line of another file is a copy, and copies drift. The
 # guard's header quotes the two tmux.conf lines that wire it up — the most
 # useful thing in that header, and the easiest to leave behind when the wiring
@@ -316,7 +384,9 @@ section "Make targets"
 # A target listed in .PHONY but with no recipe does not error — make prints
 # "Nothing to be done" and exits 0. `make test` did exactly that after a careless
 # edit deleted the target, reporting success while running nothing.
-phony="$(grep -m1 '^.PHONY:' Makefile | cut -d: -f2-)"
+# Every .PHONY line, not just the first: make accepts any number of them, and
+# reading one would leave everything on a second line silently unchecked.
+phony="$(grep '^.PHONY:' Makefile | cut -d: -f2-)"
 for target in $phony; do
   if grep -qE "^${target}:" Makefile; then
     ok "make $target has a recipe"
@@ -459,7 +529,7 @@ done
 # of the same list.
 README_UNDOCUMENTED="help"
 # shellcheck disable=SC2013  # .PHONY is one line of space-separated targets
-for t in $(grep -m1 '^.PHONY:' Makefile | cut -d: -f2-); do
+for t in $(grep '^.PHONY:' Makefile | cut -d: -f2-); do
   case " $README_UNDOCUMENTED " in *" $t "*) continue ;; esac
   grep -qE "(^|[^a-z0-9-])make $t([^a-z0-9-]|$)" README.md || {
     bad "the Makefile defines 'make $t' and the README never mentions it"
@@ -562,18 +632,6 @@ done
 # first argument that is not a flag or a flag's argument. A subset test, not
 # equality: tmux.conf also binds the prefix and the copy-mode keys, which the
 # README deliberately does not tabulate.
-tmux_bound_keys() {
-  awk '
-    /^[[:space:]]*bind(-key)?[[:space:]]/ {
-      for (i = 2; i <= NF; i++) {
-        if ($i == "-T" || $i == "-t" || $i == "-N") { i++; continue }
-        if ($i ~ /^-/) { continue }
-        print $i
-        break
-      }
-    }
-  ' tmux/.config/tmux/tmux.conf
-}
 bound="$(tmux_bound_keys)"
 keys_seen=0
 if [ -z "$bound" ]; then

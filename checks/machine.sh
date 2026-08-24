@@ -175,8 +175,15 @@ fi
 section "Editor tooling"
 # A formatter conform names but that is not installed makes format-on-save a
 # silent no-op for that filetype.
+#
+# EVERY name in each entry, not the first. The pattern here used to be
+# `{ *"..."`, which reads one formatter per filetype — right for every entry
+# today, and silently wrong the moment a filetype lists a fallback, which is the
+# ordinary way conform is configured. Taking the quoted strings off each `= {`
+# line covers the whole list; a filetype whose KEY needed quoting would show up
+# as a formatter that is not installed, which is loud rather than silent.
 for f in $(sed -n '/formatters_by_ft/,/^ *}/p' nvim/.config/nvim/lua/rich/plugins/conform.lua |
-  grep -oE '\{ *"[^"]+"' | grep -oE '"[^"]+"' | tr -d '"' | sort -u); do
+  grep '= {' | grep -oE '"[^"]+"' | tr -d '"' | sort -u); do
   if command -v "$f" >/dev/null 2>&1 || [ -x "$HOME/.local/share/nvim/mason/bin/$f" ]; then
     ok "formatter $f is available"
   else
