@@ -168,6 +168,82 @@ mutate_machine "hooks pointing nowhere is caught" "hooks installed" \
 mutate_machine "a git identity that disagrees with the repo is caught" "user.email agrees" \
   git config --local user.email someone-else@example.com
 
+# ---------------------------------------------------- what the repo says of itself
+
+# A hook and the make target that describes it are two copies of one command.
+mutate "a pre-push hook that no longer runs its make target is caught" "runs exactly what" \
+  sed -i '' 's|/tests/run.sh" --fast|/tests/run.sh"|' .githooks/pre-push
+
+mutate "a file advertising the hooks with the wrong target is caught" "advertises the hooks" \
+  sed -i '' 's/test-fast on push/test on push/' Makefile
+
+# Everything below rolls up into one ✓, so each mutation names the specific
+# claim it breaks. They are separate assertions inside checks/repo.sh; a single
+# marker is what the roll-up costs.
+mutate "a make target the README invents is caught" "describes nothing that is not here" \
+  bash -c 'printf "\nRun make nonesuch for luck.\n" >> README.md'
+
+mutate "a make target the README never mentions is caught" "describes nothing that is not here" \
+  sed -i '' '/^make doctor/d' README.md
+
+# shellcheck disable=SC2016  # backticks are markdown, not substitution
+mutate "a path the README references that is not here is caught" "describes nothing that is not here" \
+  sed -i '' 's|`checks/repo.sh`|`checks/nope.sh`|' README.md
+
+mutate "a package in the README table that is not a package is caught" "describes nothing that is not here" \
+  sed -i '' 's/^| \*\*starship\*\*/| **stargazer**/' README.md
+
+# shellcheck disable=SC2016  # backticks are markdown, not substitution
+mutate "a helper script the README documents but that is gone is caught" "describes nothing that is not here" \
+  sed -i '' 's/^\*\*`tmux-resurrect-saves`\*\*/**`tmux-resurrect-savez`**/' README.md
+
+mutate "a subcommand the README shows but the script rejects is caught" "describes nothing that is not here" \
+  sed -i '' 's/tmux-resurrect-saves list/tmux-resurrect-saves inventory/' README.md
+
+# The drift in the direction it really happens: the config changes, the README
+# does not.
+mutate "a tmux binding the README documents but tmux.conf no longer binds is caught" "describes nothing that is not here" \
+  sed -i '' '/^bind w choose-tree/d' tmux/.config/tmux/tmux.conf
+
+# shellcheck disable=SC2016  # backticks are markdown, not substitution
+mutate "a leader mapping the README documents but nothing asserts is caught" "describes nothing that is not here" \
+  sed -i '' 's/`<leader>ff`/`<leader>zz`/' README.md
+
+# shellcheck disable=SC2016  # backticks are markdown, not substitution
+mutate "a Neovim binding the README documents but the lua config lacks is caught" "describes nothing that is not here" \
+  sed -i '' 's/| `gd` |/| `gz` |/' README.md
+
+# shellcheck disable=SC2016  # the $names are starship modules, not variables
+mutate "a prompt module the README's row does not mention is caught" "describes nothing that is not here" \
+  sed -i '' 's/\$git_status\$python/$git_status$hostname$python/' starship/.config/starship.toml
+
+mutate "a timing quoted in the prose is caught" "describes nothing that is not here" \
+  bash -c 'printf "\nThe hook takes about 19s.\n" >> README.md'
+
+mutate "a suite count that no longer matches tests/ is caught" "describes nothing that is not here" \
+  sed -i '' 's/18 suites/17 suites/' .githooks/pre-push
+
+# The anti-vacuity guards. An extractor that quietly returns nothing would turn
+# every comparison above into "" = "", which passes while asserting nothing.
+mutate "an unreadable save interval fails rather than permitting every figure" "describes nothing that is not here" \
+  sed -i '' '/@continuum-save-interval/d' tmux/.config/tmux/tmux.conf
+
+mutate "unreadable leader sets fail rather than passing vacuously" "describes nothing that is not here" \
+  sed -i '' 's/^EXPECTED_LEADER_[NV]=.*/EXPECTED_LEADER_X=""/' tests/test-nvim.sh
+
+echo
+echo "== a figure in the prose must match the config that owns it =="
+# The README says continuum saves every 15 minutes because tmux.conf says 15.
+# Change one and the other is a lie with nothing to notice it — which is the
+# whole reason the permitted figures are read out of the config rather than
+# listed in the check.
+reset_repo
+sed -i '' "s/@continuum-save-interval '15'/@continuum-save-interval '20'/" \
+  "$WORK/tmux/.config/tmux/tmux.conf"
+out="$(run_check)"
+refute "changing the interval without the README is caught" contains "$out" "0 failure(s)"
+assert "and the message names the figure that stopped matching" contains "$out" "15 minutes"
+
 echo
 echo "== check.sh's own exit status =="
 reset_repo

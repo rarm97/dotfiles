@@ -146,5 +146,5 @@ else
       hooks_ok=0
     fi
   done
-  [ "$hooks_ok" -eq 1 ] && ok "git hooks installed and executable (check on commit, test on push)"
+  [ "$hooks_ok" -eq 1 ] && ok "git hooks installed and executable (check on commit, test-fast on push)"
 fi

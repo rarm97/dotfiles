@@ -10,7 +10,7 @@ Personal development environment managed with [GNU Stow](https://www.gnu.org/sof
 | **tmux** | Window-focused workflow with vim-style navigation, session persistence via resurrect/continuum |
 | **wezterm** | Terminal emulator — auto-attaches to tmux, Rosé Pine Moon theme, JetBrainsMono Nerd Font |
 | **zsh** | Shell config — lazy NVM, cached completions, fzf integration, autosuggestions, syntax highlighting |
-| **starship** | Minimal prompt — directory, git branch, git status |
+| **starship** | Minimal prompt — directory, git branch, git status, and python, nodejs, rust, golang, cmd duration where they apply |
 | **git** | Global git config and ignores |
 | **home** | Global formatter configs (.prettierrc, .stylua.toml, .clang-format) |
 
@@ -106,7 +106,8 @@ make check-repo # Repository checks only (no machine assumptions; what CI runs)
 make doctor     # Debug info (PATH, symlinks, etc.)
 make bootstrap  # Full setup from scratch
 make test       # Run the test suites in tests/
-make hooks      # Install the git hooks (check on commit, test on push)
+make test-fast  # Skip the suites that drive a terminal (what pre-push runs)
+make hooks      # Install the git hooks (check on commit, test-fast on push)
 make tidy       # Report accumulated cruft (deletes nothing)
 make tidy-apply # Act on what tidy reported
 ```
@@ -129,11 +130,24 @@ finished.**
 A check that cannot pass in CI ends up disabled, and a disabled check is worse
 than no check because it still looks like coverage.
 
-`make hooks` wires `check` to pre-commit (~1s) and `test` to pre-push (~19s), so
-none of this depends on remembering to run it. GitHub Actions runs
-`make check-repo` and `make test` on every push, so `--no-verify` and a clone
-that never ran `make hooks` are both covered. `bootstrap.sh` installs them on a
-fresh machine, and `check` fails if they are missing. Bypass a single run with
+`make hooks` wires `check` to pre-commit and `test-fast` to pre-push, so none of
+this depends on remembering to run it. pre-push runs the fast subset rather than
+`test` on purpose: the suites that drive a real terminal, editor or language
+server dominate the full run, and a hook slow enough to get bypassed is worse
+than no hook because it still looks like coverage.
+
+How fast it has to stay is deliberately not a number written here. A timing in
+prose is true only on the machine and the day it was measured, and nothing
+re-measures it — this file quoted a pre-push timing that had been corrected in
+the hook itself the day before, and stayed wrong because reading it is nobody's
+job. `tests/test-performance.sh` times the run where it actually runs and fails
+against a ceiling instead. `checks/repo.sh` enforces the rule: the only figures
+allowed here are ones it can read back out of the config that owns them.
+
+GitHub Actions runs `make check-repo` and `make test` on every push, so
+`--no-verify`, a clone that never ran `make hooks`, and the suites pre-push
+skips are all covered. `bootstrap.sh` installs the hooks on a fresh machine, and
+`check` fails if they are missing. Bypass a single run with
 `git commit --no-verify` / `git push --no-verify`.
 
 `tidy` reports and `tidy-apply` deletes: old tmux-resurrect saves, stale `99-*`

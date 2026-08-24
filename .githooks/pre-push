@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
-# Run the fast test suites before anything leaves this machine. ~26s.
+# Run the fast test suites before anything leaves this machine.
 #
 # --fast, not the full run, and the reasoning matters because it is a real
 # trade-off rather than an oversight.
 #
-# The full suite is 16 suites and takes just over FOUR MINUTES on this machine —
-# measured, after the header here had claimed ~19s for long enough to become
-# untrue. Eight of those suites drive a real terminal, editor or language
-# server, and that is where all the time goes.
+# The full run is 18 suites, and the 9 suites that drive a real terminal, editor
+# or language server are where nearly all of the time goes — minutes rather than
+# seconds. A pre-push hook that takes minutes is one you start passing
+# --no-verify to, and a hook that is routinely bypassed is worse than no hook at
+# all, because it still looks like coverage.
 #
-# A four-minute pre-push hook is one you start passing --no-verify to, and a
-# hook that is routinely bypassed is worse than no hook at all, because it still
-# looks like coverage. Twelve seconds is a hook you leave alone.
+# THERE IS NO TIMING IN THIS HEADER, and that is a rule rather than an omission.
+# The one that used to be here was wrong by more than an order of magnitude by
+# the time anyone read it, and the paragraph beneath it then argued from a
+# second number that had gone stale the same way. A timing is true of one
+# machine on one day; tests/test-performance.sh times this hook's suite where it
+# actually runs and fails it against a ceiling, which is the only place such a
+# number can stay true. checks/repo.sh rejects any figure in this file that it
+# cannot read back out of the repo — the two counts above it reads out of tests/.
 #
 # What --fast skips is not unguarded: CI runs the COMPLETE suite on every push,
 # so the pty-driven suites are checked on the way in rather than on the way out.

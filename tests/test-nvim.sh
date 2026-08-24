@@ -162,29 +162,44 @@ echo "== the whole set of leader mappings, by name =="
 # changed, which is the point.
 EXPECTED_LEADER_N="<leader>9s,<leader>9x,<leader>Q,<leader>Y,<leader>ca,<leader>cf,<leader>d,<leader>e,<leader>fb,<leader>fd,<leader>ff,<leader>fg,<leader>fh,<leader>fo,<leader>fr,<leader>fs,<leader>gs,<leader>h1,<leader>h2,<leader>h3,<leader>h4,<leader>ha,<leader>hh,<leader>hr,<leader>ld,<leader>lq,<leader>q,<leader>rn,<leader>s,<leader>tt,<leader>u,<leader>w,<leader>x,<leader>y"
 
+# Visual mode as well as normal, because they are declared separately and go
+# missing separately: <leader>9v is visual-only, so the normal-mode list above
+# would never notice it disappearing — which is exactly what let the README
+# advertise it with nothing anywhere asserting it existed.
+EXPECTED_LEADER_V="<leader>9v,<leader>ca,<leader>cf,<leader>d,<leader>p,<leader>y"
+
 # The leader is a space, so a leader mapping is one whose lhs starts with one;
 # nvim reports the raw lhs, not the <leader> form.
-leader_out="$(nv "$SANDBOX/start.lua" \
-  'lua vim.wait(2500)' \
-  'lua local out = {} for _, m in ipairs(vim.api.nvim_get_keymap("n")) do if m.lhs:sub(1, 1) == " " then out[#out + 1] = "<leader>" .. m.lhs:sub(2) end end table.sort(out) print("LEADERN:" .. table.concat(out, ","))')"
-actual_leader="$(printf '%s' "$leader_out" | tr -d '\r' | grep -o 'LEADERN:[^[:space:]]*' | head -1 | sed 's/^LEADERN://')"
+leader_set() { # $1 = mode, as nvim_get_keymap takes it
+  nv "$SANDBOX/start.lua" \
+    'lua vim.wait(2500)' \
+    "$(printf 'lua local out = {} for _, m in ipairs(vim.api.nvim_get_keymap("%s")) do if m.lhs:sub(1, 1) == " " then out[#out + 1] = "<leader>" .. m.lhs:sub(2) end end table.sort(out) print("LEADER:" .. table.concat(out, ","))' "$1")"
+}
 
-if [ -z "$actual_leader" ]; then
-  no "could not read the keymap list out of nvim at all"
-else
-  printf '    %s leader mappings\n' "$(printf '%s' "$actual_leader" | tr ',' '\n' | grep -c .)"
-  if [ "$actual_leader" = "$EXPECTED_LEADER_N" ]; then
-    ok "the normal-mode leader mappings are exactly the expected set"
+for mode in n v; do
+  case "$mode" in
+    n) want="$EXPECTED_LEADER_N" name="normal" ;;
+    v) want="$EXPECTED_LEADER_V" name="visual" ;;
+  esac
+  actual_leader="$(printf '%s' "$(leader_set "$mode")" | tr -d '\r' | grep -o 'LEADER:[^[:space:]]*' | head -1 | sed 's/^LEADER://')"
+
+  if [ -z "$actual_leader" ]; then
+    no "could not read the $name-mode keymap list out of nvim at all"
+    continue
+  fi
+  printf '    %s %s-mode leader mappings\n' "$(printf '%s' "$actual_leader" | tr ',' '\n' | grep -c .)" "$name"
+  if [ "$actual_leader" = "$want" ]; then
+    ok "the $name-mode leader mappings are exactly the expected set"
   else
-    no "the normal-mode leader mappings have changed"
+    no "the $name-mode leader mappings have changed"
     # Name the difference. A diff of two long comma-separated strings is not
     # something anyone should have to read by eye at 2am.
-    printf '%s' "$EXPECTED_LEADER_N" | tr ',' '\n' | sort >"$TEST_TMP/want"
+    printf '%s' "$want" | tr ',' '\n' | sort >"$TEST_TMP/want"
     printf '%s' "$actual_leader" | tr ',' '\n' | sort >"$TEST_TMP/got"
     comm -23 "$TEST_TMP/want" "$TEST_TMP/got" | sed 's/^/      MISSING now:  /'
     comm -13 "$TEST_TMP/want" "$TEST_TMP/got" | sed 's/^/      NEW since:    /'
   fi
-fi
+done
 
 echo
 echo "== nothing leaked into the real config or repo =="

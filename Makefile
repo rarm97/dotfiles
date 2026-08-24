@@ -18,7 +18,7 @@ help:
 	@echo "  make doctor     - print useful debug info (PATH, tool locations)"
 	@echo "  make test       - run the test suites in tests/"
 	@echo "  make test-fast  - skip the suites that drive a terminal (seconds, not minutes)"
-	@echo "  make hooks      - install the git hooks (check on commit, test on push)"
+	@echo "  make hooks      - install the git hooks (check on commit, test-fast on push)"
 	@echo "  make tidy       - report cruft that has accumulated (deletes nothing)"
 	@echo "  make tidy-apply - actually clean up what 'tidy' reported"
 
@@ -60,7 +60,7 @@ test-fast:
 # apply to every repo on the machine, none of which have a check.sh.
 hooks:
 	@git config core.hooksPath .githooks
-	@echo "hooks installed: check on commit, test on push (bypass with --no-verify)"
+	@echo "hooks installed: check on commit, test-fast on push (bypass with --no-verify)"
 
 # Both delegate to tidy.sh. This used to be two recipes of backslash-continued
 # shell; they drifted, so the report and the delete ended up selecting different

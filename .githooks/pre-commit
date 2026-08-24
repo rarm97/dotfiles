@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Assert this setup's assumptions before every commit. ~1s (measured, not guessed).
+# Assert this setup's assumptions before every commit.
 #
 # The point of check.sh is that it runs without anyone remembering to run it —
 # otherwise the repo's health depends on someone deciding to look, which is how
