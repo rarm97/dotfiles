@@ -1,89 +1,89 @@
-# Goal: the automation nobody watches
+# Goal: the claims this repo makes about itself
 
-Everything in this repo now depends on three mechanisms that run unattended, and
-none of the three has ever been exercised. Each is a safety net whose failure
-mode is silence.
+Every assertion so far tests behaviour. Nothing tests the things that DESCRIBE
+that behaviour — the README, the comments that say "keep this in step with", the
+paths one config hardcodes into another. Those drift silently by construction:
+nothing executes them, so nothing notices when they stop being true.
 
-Verify every claim below before acting on it. Some are inferences from reading;
-at least one is probably wrong, and finding that out is a real result.
+Three of these are already confirmed wrong or unguarded. They are not
+speculation; start from them.
 
-## 1. The git hooks — the thing that makes all of it automatic
+## 1. The README is already stale
 
-`.githooks/pre-commit` runs check.sh, `.githooks/pre-push` runs the suites.
-check.sh asserts the hook FILES exist, because they were once deleted while
-`core.hooksPath` stayed set and git silently ran nothing. But nothing anywhere
-proves git actually invokes them, or that they actually block anything. "The
-file is present" is not "the commit is refused".
+Line 132 says the pre-push hook takes **~19s**. That number was corrected in the
+hook itself yesterday — it is 26s now, and was 242s before that — and the README
+was not updated. It also does not mention `make test-fast`, which exists.
 
-- Drive real `git commit` and `git push` against a throwaway clone. Break
-  something check.sh catches; the commit must fail. Break something a suite
-  catches; the push must fail. Then prove `--no-verify` still gets through,
-  because a bypass that has quietly stopped working is its own bug.
-- **pre-commit runs the full check.sh, not `--repo-only`.** That includes the
-  machine half — fonts, WezTerm, formatters, a git identity. Work out what
-  happens on a machine missing one of those: if the answer is "every commit is
-  blocked until you install stylua", decide whether that is what you want and
-  say so in the hook either way.
-- **Both headers make timing claims that have almost certainly drifted.**
-  pre-push says ~19s; the suite is now 16 suites including several that drive a
-  pty. Measure both, correct the numbers, and consider whether a pre-push hook
-  that takes minutes is one people will start bypassing — a hook routinely
-  skipped is worse than no hook, because it still looks like coverage.
+That is one drift found by looking for five minutes, which is a good reason to
+stop relying on looking.
 
-## 2. Continuum's unattended save — the reason the guard exists
+- Check the README against the repo mechanically: every `make` target it names
+  must exist in the Makefile, every script and path it references must exist,
+  and every target the Makefile defines should either appear in the README or be
+  deliberately omitted.
+- The timing claims are the hard part, because they are true only at the moment
+  they are measured. Decide how to handle that rather than just fixing the
+  numbers: either the README stops quoting figures and points at the thing that
+  measures them, or the figures get asserted the way the hook's ceiling now is.
+  Say which and why.
 
-The resurrect guard was written to protect saves that happen when nobody is
-looking. Every test drives a save by hand. The automatic path has never run.
+## 2. wezterm hardcodes a path nothing checks
 
-Continuum triggers saves through a `#()` interpolation in `status-right`, which
-is an odd enough mechanism to be worth confirming rather than assuming.
+`wezterm.lua` sets `default_prog` to `/opt/homebrew/bin/tmux`. That is the
+Apple Silicon Homebrew prefix. `.zshrc` handles BOTH prefixes — it tries
+`/opt/homebrew` then `/usr/local` — so the repo already knows the other exists.
 
-- Prove a timed save actually fires, on a private socket, with the interval
-  turned right down.
-- Prove the guard runs on it — that the post-save-layout hook fires for a
-  continuum save exactly as it does for a manual one, and that a degenerate
-  automatic save is vetoed.
-- Check what `@resurrect-guard-announce` does here. It is consumed at the top of
-  the guard and is meant to keep timed saves silent unless vetoed. Confirm a
-  timed save says nothing, and a vetoed timed save does.
+On an Intel Mac, WezTerm would launch with a `default_prog` that is not there.
+Establish what that actually does before deciding it matters: a terminal that
+opens to nothing is bad, but it is loud, and loud is not this repo's problem.
+Then decide between resolving tmux at runtime and asserting the path — and note
+that `check.sh` already asserts every path *tmux.conf* references exists, while
+nothing does the same for wezterm's.
 
-## 3. The neovim config — 953 lines, 12 assertions
+Generalise it: find every absolute path hardcoded in any config here and check
+they all exist. That check is cheap and it is the same class of defect as the
+colour scheme that silently fell back.
 
-By some distance the worst-covered thing in the repo, and the one you look at
-all day. Not a demand for 100 assertions; a demand that the parts which can be
-silently wrong are the parts covered.
+## 3. Constants kept in step by a comment
 
-- Which keymaps are actually bound after startup, by name — the same shape as
-  the eager-plugin assertion in test-performance.sh, which catches a real change
-  that no timing threshold could.
-- LSP: that a server attaches to a real buffer of the right filetype, offline.
-  `nvim --headless FILE -c` works for this; `nvim -l` does NOT load the config
-  runtimepath, which has already caused one wrong conclusion here.
-- Formatters: conform is configured with `lsp_format = "fallback"`, which means
-  a format check passes even when the named formatter does not exist. Any
-  assertion here has to be mutation-checked against a deliberately bogus
-  formatter name or it proves nothing. This has caught vacuous assertions before.
+Two pairs, both currently agreeing, both maintained by hand:
+
+- `@resurrect-guard-min-windows '2'` in tmux.conf and `MIN_WINDOWS` in
+  tmux-resurrect-saves. The script's comment literally says "Keep in step with
+  @resurrect-guard-min-windows in tmux.conf."
+- `@resurrect-delete-backup-after '90'` and `KEEP_DAILY_DAYS`. tmux.conf says
+  "Kept in step with tmux-resurrect-saves' KEEP_DAILY_DAYS so the two retention
+  mechanisms agree."
+
+Nothing enforces either. Change one and the guard vetoes at a threshold prune
+does not share, or resurrect's own backup deletion fights prune's retention —
+and the first symptom is a save that is gone when you need it.
+
+A comment asking a human to remember is not a mechanism. Assert both pairs, and
+work out whether there are others; a comment saying "keep in step" is a good
+thing to grep for.
 
 ## Standing constraints
 
 - **No subagents against this machine.** Three incidents damaged the live tmux
-  server, one killing a five-window session. Anything touching tmux runs on a
-  private socket in this session, or not at all.
-- Anything touching git runs against a throwaway clone, never this repo's real
-  history.
+  server. Anything touching tmux runs on a private socket in this session.
+- Anything touching git runs against a throwaway clone.
 - Plain shell. No new plugin dependencies.
-- Explain the mechanism in the file. I want to modify what you write without
-  asking you what it does.
+- Explain the mechanism in the file.
 - **Mutation-check every assertion**: introduce the defect it claims to catch
-  and prove it fails. This repo has produced six assertions that could not fail,
-  including one that passed because `[ -e ]` follows a dangling symlink.
-- Verify the mutation harness itself. It has twice produced clean-looking
-  results that meant nothing.
-- Commit as you go with the reasoning in the message. Push and confirm CI green
+  and prove it fails. Seven assertions in this repo have turned out to be
+  incapable of failing, including one that passed because `[ -e ]` follows a
+  dangling symlink, and one where `assert "d" [ a ] && [ b ]` silently asserted
+  only the first half.
+- Prefer a check in `checks/repo.sh` over a test where the thing is static: it
+  runs on every commit and in CI, and it is cheaper.
+- Commit as you go with the reasoning in the message. Push, and confirm CI green
   before the next piece.
+- If one of the three turns out not to matter, say so plainly and move on.
 
 ## Done means
 
-Each of the three runs under test, every assertion fails when the thing it
-describes is broken, anything left uncovered says so and why, the working tree
-is clean and CI is green.
+The README cannot describe a target or path that does not exist, no config
+hardcodes a path nothing checks, both constant pairs are asserted rather than
+remembered, and anything left deliberately unguarded says why. Working tree
+clean, CI green.
