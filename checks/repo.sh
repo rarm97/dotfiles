@@ -73,21 +73,34 @@ section "Lua config"
 # defaults, which is the same silent-fallback shape as the colour scheme that
 # matched nothing. nvim is only the parser here; the files need not be its own.
 if command -v nvim >/dev/null 2>&1; then
-  lua_bad=0
-  lua_seen=0
-  while IFS= read -r f; do
-    lua_seen=$((lua_seen + 1))
-    nvim --clean --headless -l /dev/stdin "$f" <<'PROBE' >/dev/null 2>&1 || lua_bad=$((lua_bad + 1))
-local ok = loadfile(vim.v.argv[#vim.v.argv])
-os.exit(ok and 0 or 1)
-PROBE
-  done < <(git ls-files '*.lua')
-  if [ "$lua_seen" -eq 0 ]; then
+  lua_files="$(git ls-files '*.lua')"
+  lua_seen="$(printf '%s\n' "$lua_files" | grep -c .)"
+  # One nvim for the whole set, not one per file. test-check.sh re-runs these
+  # checks once per mutation, so an interpreter start per lua file was most of
+  # that suite's wall clock. `nvim -l` puts the script arguments in `arg`.
+  #
+  # io.stdout:write, not print: under `nvim --headless -l` print goes to STDERR,
+  # so discarding stderr to keep nvim quiet also discarded the filenames, and
+  # this reported every file as parsing while parsing nothing. Found by feeding
+  # it a file that does not parse, which is the only way that kind of bug shows.
+  #
+  # The probe is a plain string rather than a heredoc inside $( ). bash 3.2 —
+  # the macOS system bash, which is what runs this — scans a command
+  # substitution for its closing paren without understanding that a quoted
+  # heredoc is quoted, so ONE apostrophe anywhere in the body, in a comment
+  # even, loses the terminator and reports a syntax error thirty lines later.
+  # Confirmed in isolation: the same file parses with the apostrophe removed.
+  # shellcheck disable=SC2086  # deliberate word splitting: one argument per file
+  lua_failures="$(printf '%s\n' 'for _, f in ipairs(arg) do
+  if not loadfile(f) then io.stdout:write(f, "\n") end
+end' | nvim --clean --headless -l /dev/stdin $lua_files 2>/dev/null)"
+  if [ "${lua_seen:-0}" -eq 0 ]; then
     bad "found no lua files to parse — the scan has broken"
-  elif [ "$lua_bad" -eq 0 ]; then
+  elif [ -z "$lua_failures" ]; then
     ok "every lua file parses ($lua_seen of them, wezterm's included)"
   else
-    bad "$lua_bad lua file(s) fail to parse"
+    bad "lua file(s) that fail to parse:"
+    printf '%s\n' "$lua_failures" | sed 's/^/      /'
   fi
 else
   meh "nvim not installed, cannot parse the lua config"
@@ -680,6 +693,49 @@ fi
 
 [ "$readme_bad" -eq 0 ] && ok "the README describes nothing that is not here (targets, paths, packages, bindings, figures)"
 
+section "Lint coverage"
+# `make lint` derives its file set from the shebangs, so a script only reaches
+# the linters by starting with one. A shell script without a shebang would be
+# linted by nothing and nothing would say so — which is exactly how
+# tmux/.local/bin escaped the hand-written list that target replaced, leaving
+# all five of the scripts stowed onto PATH unchecked.
+#
+# Two rules, because the failure differs: a *.sh file needs a SHELL shebang or
+# lint skips it, and any executable needs some shebang or it is run by whatever
+# shell happens to call it.
+shebang_bad=0
+shebang_seen=0
+while IFS= read -r f; do
+  [ -f "$f" ] || continue
+  shebang_seen=$((shebang_seen + 1))
+  first="$(head -1 "$f")"
+  case "$f" in
+    *.sh)
+      case "$first" in
+        '#!'*sh) continue ;;
+        *) bad "$f is a shell script with no shell shebang — 'make lint' derives its file set from those, so nothing lints it" ;;
+      esac
+      ;;
+    *)
+      case "$first" in
+        '#!'*) continue ;;
+        *) bad "$f is executable with no shebang — whatever shell invokes it decides how it runs" ;;
+      esac
+      ;;
+  esac
+  shebang_bad=$((shebang_bad + 1))
+done < <(
+  {
+    git ls-files '*.sh'
+    git ls-files -s | awk '$1 == "100755" { print $4 }'
+  } | sort -u
+)
+if [ "$shebang_seen" -eq 0 ]; then
+  bad "found no shell scripts or executables at all — the scan has broken"
+elif [ "$shebang_bad" -eq 0 ]; then
+  ok "all $shebang_seen shell scripts and executables declare an interpreter, so lint sees them"
+fi
+
 section "CI"
 # A workflow that exists but no longer calls these targets is worse than none:
 # the badge stays green while nothing runs. Assert the wiring, not just the file.
@@ -688,7 +744,7 @@ if [ ! -f "$CI" ]; then
   bad "no CI workflow — the hooks are local and bypassable with --no-verify"
 else
   ok "CI workflow present"
-  for target in check-repo test; do
+  for target in check-repo test lint; do
     if grep -qE "make $target( |$)" "$CI"; then
       ok "CI runs 'make $target'"
     else

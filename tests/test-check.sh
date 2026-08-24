@@ -182,6 +182,14 @@ mutate_machine "hooks pointing nowhere is caught" "hooks installed" \
 mutate_machine "a git identity that disagrees with the repo is caught" "user.email agrees" \
   git config --local user.email someone-else@example.com
 
+# ------------------------------------------------------ what the linters can see
+
+mutate "a shell script with no shebang is caught, because lint would skip it" "declare an interpreter" \
+  bash -c 'tail -n +2 checks/lib.sh > checks/lib.tmp && mv checks/lib.tmp checks/lib.sh'
+
+mutate "CI no longer running the linters is caught" "CI runs 'make lint'" \
+  sed -i '' 's/^        run: make lint$/        run: true/' .github/workflows/ci.yml
+
 # ------------------------------------------- constants written down more than once
 
 # The pair the comments named: the guard's floor and prune's idea of degenerate.

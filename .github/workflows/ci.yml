@@ -27,10 +27,11 @@ jobs:
       - name: Install dependencies
         run: brew install stow shellcheck shfmt neovim tmux stylua prettier
 
+      # `make lint` derives its file set from the shebangs rather than listing
+      # paths. The list that used to be here omitted tmux/.local/bin, so none of
+      # the five scripts that get stowed onto PATH were linted at all.
       - name: Lint
-        run: |
-          shellcheck -x -P tests check.sh tidy.sh bootstrap.sh checks/*.sh tests/*.sh .githooks/*
-          shfmt -i 2 -ci -d check.sh tidy.sh bootstrap.sh checks/*.sh tests/*.sh
+        run: make lint
 
       # Repository-internal assertions only. checks/machine.sh needs WezTerm, a
       # font, a stow tree and a git identity, none of which a runner has; see
@@ -39,10 +40,15 @@ jobs:
         run: make check-repo
 
       # Without this the runner skips the suites that matter most: restore,
-      # integration, nvim, and five of the bindings. They skip honestly — each
-      # names the file it wanted — but a check that only ever runs on one laptop
-      # is the thing CI exists to replace. Stowing and fetching the tmux plugins
-      # is cheap and makes them real.
+      # integration, nvim, and every binding whose script has to be stowed or
+      # whose plugin has to be installed. They skip honestly — each names the
+      # file it wanted — but a check that only ever runs on one laptop is the
+      # thing CI exists to replace. Stowing and fetching the tmux plugins is
+      # cheap and makes them real.
+      #
+      # No count of those bindings here on purpose: it was "five", and a sixth
+      # skip-guarded binding would have made it quietly wrong the way every
+      # other number written into a comment in this repo went wrong.
       - name: Install the dotfiles so the suites can exercise them
         run: |
           make stow

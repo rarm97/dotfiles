@@ -107,6 +107,7 @@ make doctor     # Debug info (PATH, symlinks, etc.)
 make bootstrap  # Full setup from scratch
 make test       # Run the test suites in tests/
 make test-fast  # Skip the suites that drive a terminal (what pre-push runs)
+make lint       # shellcheck and shfmt every shell script here (what CI lints)
 make hooks      # Install the git hooks (check on commit, test-fast on push)
 make tidy       # Report accumulated cruft (deletes nothing)
 make tidy-apply # Act on what tidy reported
