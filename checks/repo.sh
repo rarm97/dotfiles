@@ -12,18 +12,31 @@ REPO="$PWD"
 # shellcheck source=/dev/null
 . "$REPO/checks/lib.sh"
 
-section "Neovim config"
+section "Lua config"
 # These generalise past whatever anyone has read: a syntax error or a deprecated
 # call in a plugin file nobody has opened shows up as "nvim starts a bit oddly".
+#
+# EVERY tracked lua file, not just nvim's. wezterm.lua is lua too and nothing
+# parsed it — a syntax error there makes WezTerm fall back to its built-in
+# defaults, which is the same silent-fallback shape as the colour scheme that
+# matched nothing. nvim is only the parser here; the files need not be its own.
 if command -v nvim >/dev/null 2>&1; then
   lua_bad=0
+  lua_seen=0
   while IFS= read -r f; do
+    lua_seen=$((lua_seen + 1))
     nvim --clean --headless -l /dev/stdin "$f" <<'PROBE' >/dev/null 2>&1 || lua_bad=$((lua_bad + 1))
 local ok = loadfile(vim.v.argv[#vim.v.argv])
 os.exit(ok and 0 or 1)
 PROBE
-  done < <(find nvim/.config/nvim -name '*.lua' -type f)
-  if [ "$lua_bad" -eq 0 ]; then ok "every lua file parses"; else bad "$lua_bad lua file(s) fail to parse"; fi
+  done < <(git ls-files '*.lua')
+  if [ "$lua_seen" -eq 0 ]; then
+    bad "found no lua files to parse — the scan has broken"
+  elif [ "$lua_bad" -eq 0 ]; then
+    ok "every lua file parses ($lua_seen of them, wezterm's included)"
+  else
+    bad "$lua_bad lua file(s) fail to parse"
+  fi
 else
   meh "nvim not installed, cannot parse the lua config"
 fi

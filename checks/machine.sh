@@ -54,21 +54,80 @@ for s in tmux-resurrect-guard tmux-resurrect-saves tmux-clear-scrollback tmux-se
   fi
 done
 
-# Every script tmux.conf invokes by path must actually be there.
+# Every absolute path any config here hardcodes must actually be there.
+#
+# This was tmux.conf alone, and the asymmetry was the whole defect: wezterm.lua
+# hardcodes /opt/homebrew/bin/tmux — the Apple Silicon Homebrew prefix — and
+# nothing checked it, while .zshrc and bootstrap.sh both try /opt/homebrew and
+# then /usr/local, so the repo already knew the other prefix existed.
+#
+# WHAT A MISSING default_prog ACTUALLY DOES, established rather than assumed,
+# because it decides whether this is worth anything. WezTerm opens its window
+# and prints into it:
+#
+#   Unable to spawn /opt/homebrew/bin/tmux because it doesn't exist on the
+#   filesystem (ENOENT: No such file or directory)
+#
+# and holds the window open, because exit_behavior defaults to CloseOnCleanExit
+# and that was not a clean exit. Verified against wezterm 20250713 by starting a
+# throwaway config with a bad path and reading the pane back.
+#
+# So it is loud, and it names the path. That is why wezterm.lua still hardcodes
+# one path rather than growing a resolver: a resolver needs a fallback for "no
+# prefix has tmux", and every candidate fallback — bare `tmux` under the launchd
+# PATH a Finder-launched WezTerm inherits, or a plain shell — trades a precise
+# error for a vaguer one or for none at all. What was missing was the assertion.
+# On a machine with the other prefix this now says so, at `make check` time,
+# which the pre-commit hook runs.
+#
+# THREE RULES keep the scan honest:
+#
+#   Comments are stripped. A full-line comment mentioning a path is prose —
+#   including them reported four paths that no config ever opens.
+#
+#   PATH assignments are skipped. A directory that is not on this machine is
+#   ignored by the shell, so a dead PATH entry is not a defect; a dead program
+#   path is.
+#
+#   Alternatives count. A file naming the same path under BOTH Homebrew
+#   prefixes is choosing at runtime, so only one of the two has to exist.
+#
+# And one exclusion by name: tmux-sessionizer's SEARCH_DIRS are roots to look
+# in, not requirements — the script tests each with [[ -d ]] and skips what is
+# not there — so requiring them would fail on any machine that does not happen
+# to have all four.
 missing=0
-# shellcheck disable=SC2088  # the pattern below is a regex, not a path
-while read -r p; do
-  # Strip the quote, backslash or comma that terminates the surrounding tmux
-  # command; without this every quoted path is reported missing.
-  p="${p%%[\'\"\\,]*}"
-  [ -n "$p" ] || continue
-  expanded="${p/#\~/$HOME}"
-  [ -e "$expanded" ] || {
-    bad "tmux.conf references $p, which does not exist"
+paths_seen=0
+while IFS= read -r f; do
+  [ -f "$f" ] || continue
+  # Quotes, backticks, commas and brackets become spaces so a path is a word:
+  # \042 " \047 ' \140 ` — written as octal to keep this line readable.
+  body="$(sed -e 's/^[[:space:]]*#.*//' -e 's/^[[:space:]]*--.*//' -e '/SEARCH_DIRS=(/,/^)/d' "$f" 2>/dev/null |
+    grep -v -E 'PATH=|PATH "' | tr -s '\042\047\140,()' '     ')"
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    paths_seen=$((paths_seen + 1))
+    expanded="${p/#\~/$HOME}"
+    [ -e "$expanded" ] && continue
+    alt=""
+    case "$p" in
+      /opt/homebrew/*) alt="/usr/local/${p#/opt/homebrew/}" ;;
+      /usr/local/*) alt="/opt/homebrew/${p#/usr/local/}" ;;
+    esac
+    if [ -n "$alt" ] && [ -e "$alt" ] && grep -qF "$alt" "$f"; then
+      continue
+    fi
+    bad "$f references $p, which does not exist"
     missing=$((missing + 1))
-  }
-done < <(grep -oE '~/[^" ]*' tmux/.config/tmux/tmux.conf | sort -u)
-[ "$missing" -eq 0 ] && ok "every path tmux.conf references exists"
+  done < <(printf '%s\n' "$body" |
+    grep -oE '(/opt/homebrew|/usr/local|/Applications|/Library)[A-Za-z0-9_./+-]*|~/[A-Za-z0-9_./+-]*' |
+    sort -u)
+done < <(git ls-files | grep -vE '^(checks/|tests/|\.github/)|^GOAL\.md$')
+if [ "$paths_seen" -eq 0 ]; then
+  bad "found no hardcoded paths in any config at all — the scan has broken"
+elif [ "$missing" -eq 0 ]; then
+  ok "every path the configs hardcode exists ($paths_seen checked, across every tracked config)"
+fi
 
 section "Git identity"
 # ~/.gitconfig is read AFTER the stowed config, so anything it sets wins. When

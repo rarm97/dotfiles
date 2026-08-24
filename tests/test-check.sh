@@ -135,8 +135,21 @@ mutate "a deprecated Neovim API is caught" "deprecated" \
 mutate "a plugin file with no lazy spec is caught" "lazy spec" \
   sed -i '' 's/^return {/local _unused = {/' nvim/.config/nvim/lua/rich/plugins/fidget.lua
 
-mutate_machine "a tmux.conf path that does not exist is caught" "every path tmux.conf references" \
+mutate_machine "a tmux.conf path that does not exist is caught" "every path the configs hardcode" \
   sed -i '' 's|~/.local/bin/tmux-clear-scrollback|~/.local/bin/does-not-exist|' tmux/.config/tmux/tmux.conf
+
+# The asymmetry this generalisation existed to close: tmux.conf's paths were
+# asserted and wezterm's were not.
+mutate_machine "a wezterm default_prog that is not on this machine is caught" "every path the configs hardcode" \
+  sed -i '' 's|/opt/homebrew/bin/tmux|/opt/homebrew/bin/tmux-not-here|' wezterm/.config/wezterm/wezterm.lua
+
+# Naming both Homebrew prefixes means "either will do", not "neither need be
+# there". A rule that rescued this pair would rescue everything.
+mutate_machine "a pair of Homebrew paths where neither exists is still caught" "every path the configs hardcode" \
+  bash -c 'printf "\nprobe=/opt/homebrew/bin/nope\nprobe2=/usr/local/bin/nope\n" >> zsh/.zshrc'
+
+mutate "a syntax error in wezterm.lua is caught" "every lua file parses" \
+  bash -c 'printf "\nthis is not lua((\n" >> wezterm/.config/wezterm/wezterm.lua'
 
 mutate "a .PHONY target with no recipe is caught" "has a recipe" \
   bash -c 'python3 - <<PY
@@ -253,6 +266,29 @@ sed -i '' "s/@continuum-save-interval '15'/@continuum-save-interval '20'/" \
 out="$(run_check)"
 refute "changing the interval without the README is caught" contains "$out" "0 failure(s)"
 assert "and the message names the figure that stopped matching" contains "$out" "15 minutes"
+
+echo
+echo "== naming both Homebrew prefixes means only one has to exist =="
+# .zshrc and bootstrap.sh try /opt/homebrew and then /usr/local. No machine has
+# a Homebrew binary under both, so without this rule the path scan would report
+# a missing path on every machine there is. Only meaningful where exactly one of
+# the two has tmux, which is every normal machine.
+prefixes=0
+[ -e /opt/homebrew/bin/tmux ] && prefixes=$((prefixes + 1))
+[ -e /usr/local/bin/tmux ] && prefixes=$((prefixes + 1))
+reset_repo
+if ! contains "$(run_check_full)" "every path the configs hardcode"; then
+  printf '  \033[33mSKIP\033[0m  the machine half does not pass here\n'
+elif [ "$prefixes" -ne 1 ]; then
+  printf '  \033[33mSKIP\033[0m  this machine has tmux under %s Homebrew prefixes, not one\n' "$prefixes"
+else
+  absent=/usr/local/bin/tmux
+  [ -e "$absent" ] && absent=/opt/homebrew/bin/tmux
+  printf '\nprobe=/opt/homebrew/bin/tmux\nprobe2=/usr/local/bin/tmux\n' >>"$WORK/zsh/.zshrc"
+  out="$(run_check_full)"
+  refute "the absent prefix is not reported when the file names both" \
+    contains "$out" "$absent, which does not exist"
+fi
 
 echo
 echo "== check.sh's own exit status =="
