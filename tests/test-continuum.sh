@@ -21,6 +21,9 @@
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+# Declared slow: drives a real tmux server and waits on its timers.
+# `tests/run.sh --fast` skips these, and so does the pre-push hook; CI runs the
+# complete set.
 # shellcheck disable=SC2034  # read by run.sh with grep, not by this shell
 SUITE_SLOW=1
 

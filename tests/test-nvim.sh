@@ -21,7 +21,8 @@
 
 # Declared slow: tens of seconds, because it drives a real terminal, editor or
 # language server, or repeats an expensive command many times. `tests/run.sh
-# --fast` skips these; the pre-push hook still runs everything, and so does CI.
+# --fast` skips these, and so does the pre-push hook; CI runs the complete set,
+# so what the hook skips is caught on the way in rather than on the way out.
 # Read by run.sh with grep, not by this shell.
 # shellcheck disable=SC2034
 SUITE_SLOW=1

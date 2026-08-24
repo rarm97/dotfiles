@@ -206,6 +206,37 @@ for pair in pre-commit:check pre-push:test-fast; do
 done
 [ "$hooks_bad" -eq 0 ] && ok "every file that advertises the hooks names the target the hook really runs"
 
+section "Slow suites"
+# A suite opts out of the fast set with SUITE_SLOW=1, and every one of them says
+# in its header who still runs it. That sentence was copy-pasted into seven
+# files and went false in all seven on the day pre-push started passing --fast:
+# it said the hook still ran everything, when the hook now skips precisely
+# these. Nothing noticed, because a comment is not executed.
+#
+# So derive the sentence from the hook instead of trusting the copies. Comments
+# are flattened before matching, because otherwise this would be dictating where
+# the line wraps.
+case "$(hook_runs pre-push)" in
+  *--fast*) slow_phrase="and so does the pre-push hook" ;;
+  *) slow_phrase="the pre-push hook runs these too" ;;
+esac
+slow_bad=0
+slow_seen=0
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  slow_seen=$((slow_seen + 1))
+  flat="$(sed -n 's/^#[[:space:]]\{0,1\}//p' "$f" | tr '\n' ' ' | tr -s ' ')"
+  grep -qF "$slow_phrase" <<<"$flat" || {
+    bad "$f declares SUITE_SLOW=1 but never says '$slow_phrase' — its header and the hook disagree"
+    slow_bad=$((slow_bad + 1))
+  }
+done < <(grep -l '^SUITE_SLOW=1' tests/test-*.sh)
+if [ "$slow_seen" -eq 0 ]; then
+  bad "no suite declares SUITE_SLOW=1 — either --fast runs everything now, or the marker was renamed"
+elif [ "$slow_bad" -eq 0 ]; then
+  ok "all $slow_seen slow suites say who runs them, and it agrees with what pre-push does"
+fi
+
 section "README"
 # The README is the only file here that describes this repo without executing
 # any of it, so nothing notices when it stops being true. By the time this was

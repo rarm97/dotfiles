@@ -34,6 +34,9 @@
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+# Declared slow: repeats an expensive command many times, and runs the fast
+# suite itself. `tests/run.sh --fast` skips these, and so does the pre-push
+# hook; CI runs the complete set.
 # shellcheck disable=SC2034  # read by run.sh with grep, not by this shell
 SUITE_SLOW=1
 
@@ -165,8 +168,12 @@ echo "== the pre-push hook stays fast enough to leave switched on =="
 # and nowhere else: this suite is SUITE_SLOW, so --fast excludes it and the
 # nested run cannot re-enter itself.
 #
-# A minute is the ceiling rather than the current 26s, because the point is to
-# catch the hook becoming something you avoid, not to fail on a busy machine.
+# A minute is the ceiling rather than anything near the measured run, because
+# the point is to catch the hook becoming something you avoid, not to fail on a
+# busy machine. The measured figure is printed on the line below whether it
+# passes or not, which is the only place such a number stays true — writing it
+# into this comment is how .githooks/pre-push came to argue from a number that
+# was wrong by an order of magnitude.
 HOOK_CEILING_S=60
 start="$(date +%s)"
 "$REPO_ROOT/tests/run.sh" --fast >/dev/null 2>&1

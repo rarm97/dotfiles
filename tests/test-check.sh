@@ -15,7 +15,8 @@
 
 # Declared slow: tens of seconds, because it drives a real terminal, editor or
 # language server, or repeats an expensive command many times. `tests/run.sh
-# --fast` skips these; the pre-push hook still runs everything, and so does CI.
+# --fast` skips these, and so does the pre-push hook; CI runs the complete set,
+# so what the hook skips is caught on the way in rather than on the way out.
 # Read by run.sh with grep, not by this shell.
 # shellcheck disable=SC2034
 SUITE_SLOW=1
@@ -176,6 +177,15 @@ mutate "a pre-push hook that no longer runs its make target is caught" "runs exa
 
 mutate "a file advertising the hooks with the wrong target is caught" "advertises the hooks" \
   sed -i '' 's/test-fast on push/test on push/' Makefile
+
+# A slow suite's header must agree with what the hook really does.
+mutate "a slow suite claiming the hook runs it is caught" "say who runs them" \
+  sed -i '' 's/and so does the pre-push hook/and the pre-push hook still runs everything/' tests/test-restore.sh
+
+mutate "losing the SUITE_SLOW marker entirely is caught" "say who runs them" \
+  sed -i '' 's/^SUITE_SLOW=1/SUITE_BRISK=1/' tests/test-restore.sh tests/test-nvim.sh tests/test-check.sh \
+  tests/test-bindings.sh tests/test-integration.sh tests/test-helpers.sh tests/test-sessionizer.sh \
+  tests/test-continuum.sh tests/test-performance.sh
 
 # Everything below rolls up into one ✓, so each mutation names the specific
 # claim it breaks. They are separate assertions inside checks/repo.sh; a single
