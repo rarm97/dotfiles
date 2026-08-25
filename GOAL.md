@@ -1,89 +1,113 @@
-# Goal: the claims this repo makes about itself
+# Goal: what the checks would not notice
 
-Every assertion so far tests behaviour. Nothing tests the things that DESCRIBE
-that behaviour — the README, the comments that say "keep this in step with", the
-paths one config hardcodes into another. Those drift silently by construction:
-nothing executes them, so nothing notices when they stop being true.
+The last goal asked whether the things that DESCRIBE this repo were true. They
+mostly are now, and the ones that were not are asserted rather than remembered.
 
-Three of these are already confirmed wrong or unguarded. They are not
-speculation; start from them.
+This one asks a harder question about the same net: where does it have holes,
+and where does it have a hole that only shows under load. Three targets, all
+confirmed by reading the files rather than guessed at.
 
-## 1. The README is already stale
+## 1. Two plugins that are installed, sourced, advertised — and unasserted
 
-Line 132 says the pre-push hook takes **~19s**. That number was corrected in the
-hook itself yesterday — it is 26s now, and was 242s before that — and the README
-was not updated. It also does not mention `make test-fast`, which exists.
+`bootstrap.sh` brews `zsh-autosuggestions` and `zsh-syntax-highlighting`. The
+README's package table advertises both. `.zshrc` sources each one only if the
+directory is there:
 
-That is one drift found by looking for five minutes, which is a good reason to
-stop relying on looking.
+    if [[ -d "${HOMEBREW_PREFIX:-}/share/zsh-autosuggestions" ]]; then
 
-- Check the README against the repo mechanically: every `make` target it names
-  must exist in the Makefile, every script and path it references must exist,
-  and every target the Makefile defines should either appear in the README or be
-  deliberately omitted.
-- The timing claims are the hard part, because they are true only at the moment
-  they are measured. Decide how to handle that rather than just fixing the
-  numbers: either the README stops quoting figures and points at the thing that
-  measures them, or the figures get asserted the way the hook's ceiling now is.
-  Say which and why.
+`HOMEBREW_PREFIX` is set by `brew shellenv` at the top of the same file, and
+only if a brew was found. If it was not, the test degrades to `-d
+"/share/zsh-autosuggestions"`, which is false, and BOTH plugins are skipped with
+no message at all. The same happens, on a machine that has brew, if the formula
+simply is not installed. The shell just feels plainer.
 
-## 2. wezterm hardcodes a path nothing checks
+That is the exact shape check.sh exists for, and check.sh already does this job
+one file over: it reads the formatters `conform.lua` names and warns for each
+one that is not installed. Nothing does it for these two.
 
-`wezterm.lua` sets `default_prog` to `/opt/homebrew/bin/tmux`. That is the
-Apple Silicon Homebrew prefix. `.zshrc` handles BOTH prefixes — it tries
-`/opt/homebrew` then `/usr/local` — so the repo already knows the other exists.
+- Decide whether a missing plugin is a WARNING or a FAILURE, and say why. The
+  formatter check warns, on the argument that a half-set-up machine must still
+  be able to commit. The same argument may or may not apply here.
+- The interesting part is not the two names. It is that `.zshrc` sources things
+  conditionally in several places and every one of those conditions is a silent
+  skip. Find them all before deciding what to assert.
 
-On an Intel Mac, WezTerm would launch with a `default_prog` that is not there.
-Establish what that actually does before deciding it matters: a terminal that
-opens to nothing is bad, but it is loud, and loud is not this repo's problem.
-Then decide between resolving tmux at runtime and asserting the path — and note
-that `check.sh` already asserts every path *tmux.conf* references exists, while
-nothing does the same for wezterm's.
+## 2. Two lists of language servers, one file, no relationship asserted
 
-Generalise it: find every absolute path hardcoded in any config here and check
-they all exist. That check is cheap and it is the same class of defect as the
-colour scheme that silently fell back.
+`nvim/.config/nvim/lua/rich/plugins/lsp.lua` names its servers twice:
+`ensure_installed` (nine of them, what mason fetches) and `vim.lsp.enable`
+(ten). The difference is `rust_analyzer`, and it is deliberate — the file says
+so, because that one comes from rustup rather than mason.
 
-## 3. Constants kept in step by a comment
+Add a server to `ensure_installed` and forget `enable` and it is downloaded and
+never attached. Add it to `enable` and forget `ensure_installed` and it is
+enabled and never downloaded. Either way you get a filetype with no language
+server, no error, and a config that reads as though it should work.
 
-Two pairs, both currently agreeing, both maintained by hand:
+The exception is the whole difficulty: `enable` ⊇ `ensure_installed` is the
+rule, and `rust_analyzer` is the one deliberate extra. An exception list needs a
+reason attached to it, not just a name.
 
-- `@resurrect-guard-min-windows '2'` in tmux.conf and `MIN_WINDOWS` in
-  tmux-resurrect-saves. The script's comment literally says "Keep in step with
-  @resurrect-guard-min-windows in tmux.conf."
-- `@resurrect-delete-backup-after '90'` and `KEEP_DAILY_DAYS`. tmux.conf says
-  "Kept in step with tmux-resurrect-saves' KEEP_DAILY_DAYS so the two retention
-  mechanisms agree."
+## 3. Assertions that fail open
 
-Nothing enforces either. Change one and the guard vetoes at a threshold prune
-does not share, or resurrect's own backup deletion fights prune's retention —
-and the first symptom is a save that is gone when you need it.
+Thirteen comparisons in `tests/` default a value that could not be read:
+`[ "${x:-N}" ... ]`. Twelve of them default to the FAILING side, so a value that
+never arrived takes the assertion down with it. One does not:
 
-A comment asking a human to remember is not a mechanism. Assert both pairs, and
-work out whether there are others; a comment saying "keep in step" is a good
-thing to grep for.
+    tests/test-fresh-machine.sh:105
+    dirty="$(... | grep -c 'tmux/.local/share' || true)"
+    assert "nothing was written into tmux/.local/" [ "${dirty:-0}" -eq 0 ]
+
+The default is the passing value. If the pipeline behind it ever produces
+nothing, that assertion passes without testing anything. It cannot today,
+because `grep -c` always prints a number — which is precisely the kind of
+reasoning that stops being true when someone edits the pipeline and has no idea
+it was load-bearing.
+
+The direction of a default decides whether an assertion fails safe or fails
+open, and nothing checks it. That is greppable.
+
+- The wider version is worth stating even if it is not all doable at once.
+  `tests/test-check.sh` mutation-covers `checks/*.sh`: every assertion there has
+  a defect introduced and is proved to fail. NOTHING mutation-covers the
+  eighteen suites, and this repo has a record of assertions that could not fail
+  — two more were found while writing the last goal's work, a binding
+  accounting that compared counts and an eager-plugin test compared against a
+  remembered number.
+- Start where a false pass costs most rather than where it is easiest: the guard
+  and prune suites decide whether a save you need is still there.
 
 ## Standing constraints
 
 - **No subagents against this machine.** Three incidents damaged the live tmux
   server. Anything touching tmux runs on a private socket in this session.
+  Note also that `wezterm cli` finds a running GUI through the environment: a
+  spawn meant for a throwaway instance opened a window on the live one and
+  attached a second client to the real tmux session. Address an instance by its
+  own socket, with the WEZTERM_* variables cleared.
 - Anything touching git runs against a throwaway clone.
 - Plain shell. No new plugin dependencies.
 - Explain the mechanism in the file.
 - **Mutation-check every assertion**: introduce the defect it claims to catch
-  and prove it fails. Seven assertions in this repo have turned out to be
+  and prove it fails. Nine assertions in this repo have turned out to be
   incapable of failing, including one that passed because `[ -e ]` follows a
-  dangling symlink, and one where `assert "d" [ a ] && [ b ]` silently asserted
-  only the first half.
+  dangling symlink, one where `assert "d" [ a ] && [ b ]` silently asserted only
+  the first half, and a binding accounting that compared counts, so renaming a
+  key left both numbers unchanged. A tenth was caught before it shipped, which
+  is the only reason it is not on that list: a batched lua parse reported every
+  file as parsing, because `print` under `nvim -l` writes to stderr and stderr
+  was being discarded to keep nvim quiet.
 - Prefer a check in `checks/repo.sh` over a test where the thing is static: it
   runs on every commit and in CI, and it is cheaper.
+- A figure may appear in prose only where something reads it back. `checks/repo.sh`
+  enforces this for the README and the hooks.
 - Commit as you go with the reasoning in the message. Push, and confirm CI green
   before the next piece.
 - If one of the three turns out not to matter, say so plainly and move on.
 
 ## Done means
 
-The README cannot describe a target or path that does not exist, no config
-hardcodes a path nothing checks, both constant pairs are asserted rather than
-remembered, and anything left deliberately unguarded says why. Working tree
-clean, CI green.
+A silently skipped shell plugin says something, the two server lists cannot
+disagree without a reason recorded, no assertion defaults to its own passing
+value, and whatever is left deliberately unguarded says why. Working tree clean,
+CI green.
