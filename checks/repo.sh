@@ -282,32 +282,66 @@ agree "how many lines guard.log is trimmed to" \
   "its length test=$(sed -n 's/.*"\$lines" -gt \([0-9][0-9]*\).*/\1/p' "$GUARD" | head -1)" \
   "the tail that trims it=$(sed -n 's/.*tail -n \([0-9][0-9]*\) "\$logfile".*/\1/p' "$GUARD" | head -1)"
 
-# The stow package set is written by hand in four places: `make stow`, `make
-# unstow`, bootstrap.sh's array, and the list check.sh dry-runs to decide
-# whether everything is stowed. Add a package and miss the last one and "every
-# package is stowed" quietly stops covering it — so new files in that package
-# never go live and nothing anywhere says so.
+# The stow package set is written by hand in six places, and the first version
+# of this check knew about four of them — which is the defect it exists to catch,
+# committed inside the fix for it. So the copies are FOUND rather than listed: a
+# line counts as one when it names four or more of the packages, which no prose
+# here does, and every copy must name exactly the set `make stow` uses.
 #
-# git/gitconfig is dropped from each list before comparing: three of the four
-# add it conditionally on which directory exists, and that difference is the
-# design rather than a drift.
-pkg_set() { # $1 = space-separated package names
+# Miss a copy when adding a package and the symptom is silent: check.sh's
+# "every package is stowed" quietly stops covering it, so new files in that
+# package never go live and nothing says so.
+#
+# tests/test-check.sh is skipped. Its job is to hold deliberately broken copies
+# of things, and a mutation that shortens this list is test data, not drift.
+pkg_set() { # $1 = whitespace-separated package names
   printf '%s' "$1" | tr ' ' '\n' | grep -v '^$' | grep -vE '^(git|gitconfig)$' | sort -u | paste -sd, -
 }
-pkg_sources=(
-  "make stow=$(pkg_set "$(sed -n '/^stow:/,/^$/p' Makefile | grep -m1 'PKGS=' | sed 's/.*PKGS="\([^"]*\)".*/\1/')")"
-  "make unstow=$(pkg_set "$(sed -n '/^unstow:/,/^$/p' Makefile | grep -m1 'PKGS=' | sed 's/.*PKGS="\([^"]*\)".*/\1/')")"
-  "bootstrap.sh=$(pkg_set "$(sed -n 's/.*local packages=(\([^)]*\)).*/\1/p' bootstrap.sh)")"
-)
-# The machine half may legitimately be absent — --repo-only has to work without
-# it, which is what lets CI run this half alone. Warn rather than skip quietly.
-if [ -f checks/machine.sh ]; then
-  # shellcheck disable=SC2016  # $HOME below is text inside machine.sh, not here
-  pkg_sources+=("checks/machine.sh=$(pkg_set "$(sed -n 's/.*stow -n -t "$HOME" \([a-z ]*\)2>&1.*/\1/p' checks/machine.sh)")")
+pkg_ref="$(pkg_set "$(sed -n '/^stow:/,/^$/p' Makefile | grep -m1 'PKGS=' | sed 's/.*PKGS="\([^"]*\)".*/\1/')")"
+if [ -z "$pkg_ref" ]; then
+  bad "could not read the package list out of the Makefile — every copy would compare against nothing"
 else
-  meh "checks/machine.sh is not here, so its copy of the stow list went unchecked"
+  pkg_words="$(printf '%s' "$pkg_ref" | tr ',' ' ')"
+  # A copy is a RUN of package names with nothing between them. Counting names
+  # anywhere on the line is not enough: checks/machine.sh's tool loop happens to
+  # name four of the six, interleaved with rg, fd and stow, and was reported as
+  # a package list that had lost two entries.
+  # shellcheck disable=SC2016  # $0 and $... below are awk's, not the shell's
+  pkg_hits="$(git ls-files | grep -v '^tests/test-check.sh$' | tr '\n' '\0' |
+    xargs -0 awk -v names=" $pkg_words " '
+      {
+        line = $0
+        gsub(/[^A-Za-z0-9_-]/, " ", line)
+        n = split(line, tok, " ")
+        run = ""; best = ""; runlen = 0; bestlen = 0
+        for (i = 1; i <= n; i++) {
+          if (tok[i] != "" && index(names, " " tok[i] " ") > 0) {
+            run = run " " tok[i]
+            runlen++
+            if (runlen > bestlen) { best = run; bestlen = runlen }
+          } else {
+            run = ""
+            runlen = 0
+          }
+        }
+        if (bestlen >= 4) print FILENAME "\t" best
+      }')"
+  pkg_copies=0
+  pkg_bad=0
+  while IFS="$(printf '\t')" read -r f run; do
+    [ -n "$f" ] || continue
+    pkg_copies=$((pkg_copies + 1))
+    if [ "$(pkg_set "$run")" != "$pkg_ref" ]; then
+      bad "$f lists the stow packages as '$(pkg_set "$run")', and 'make stow' uses '$pkg_ref'"
+      pkg_bad=$((pkg_bad + 1))
+    fi
+  done <<<"$pkg_hits"
+  if [ "$pkg_copies" -lt 2 ]; then
+    bad "found $pkg_copies place(s) listing the stow packages — there are several, so the scan has broken"
+  elif [ "$pkg_bad" -eq 0 ]; then
+    ok "all $pkg_copies copies of the stow package list agree ($pkg_ref)"
+  fi
 fi
-agree "the set of stow packages" "${pkg_sources[@]}"
 
 # A comment that quotes a line of another file is a copy, and copies drift. The
 # guard's header quotes the two tmux.conf lines that wire it up — the most

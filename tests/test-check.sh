@@ -197,8 +197,13 @@ mutate "CI no longer running the linters is caught" "CI runs 'make lint'" \
 mutate "a binding renamed out of test-bindings.sh's accounting is caught" "pressed or explained" \
   sed -i '' 's/^bind w choose-tree/bind W choose-tree/' tmux/.config/tmux/tmux.conf
 
-mutate "a stow package list that disagrees with the others is caught" "set of stow packages" \
+mutate "a stow package list that disagrees with the others is caught" "copies of the stow package list" \
   sed -i '' 's/local packages=(nvim wezterm tmux zsh home starship)/local packages=(nvim wezterm tmux zsh home)/' bootstrap.sh
+
+# The copy the first version of this check could not see, because it named its
+# four sources by hand and there were six.
+mutate "a copy in a test suite disagreeing is caught too" "copies of the stow package list" \
+  sed -i '' 's/nvim wezterm tmux zsh home starship git/nvim wezterm tmux zsh home git/' tests/test-fresh-machine.sh
 
 # make accepts any number of .PHONY lines; reading only the first left
 # everything on a second one unchecked.
