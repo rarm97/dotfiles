@@ -123,6 +123,20 @@ mutate_machine "a wrong wezterm colour scheme is caught" "colour scheme" \
 mutate "a missing usstyle is caught" "usstyle" \
   sed -i '' 's/:RGB:usstyle/:RGB/' tmux/.config/tmux/tmux.conf
 
+# The defect this exists for: restore back on the key a held Ctrl reaches.
+mutate "restore left on resurrect's C-r default is caught" "restore is bound to" \
+  sed -i '' "s/^set -g @resurrect-restore 'C-S-r'$/set -g @resurrect-restore 'C-r'/" tmux/.config/tmux/tmux.conf
+
+# Reads correct, cannot be pressed: C-S-r without extended-keys is just C-r.
+mutate "a Shift-bearing restore key without extended-keys is caught" "restore is bound to" \
+  sed -i '' '/^set -s extended-keys on$/d' tmux/.config/tmux/tmux.conf
+
+mutate "a Shift-bearing restore key without the extkeys feature is caught" "restore is bound to" \
+  sed -i '' 's/:RGB:usstyle:extkeys/:RGB:usstyle/' tmux/.config/tmux/tmux.conf
+
+mutate "no @resurrect-restore at all fails rather than passing vacuously" "restore is bound to" \
+  sed -i '' '/^set -g @resurrect-restore/d' tmux/.config/tmux/tmux.conf
+
 mutate "an untracked lazy-lock.json is caught" "lazy-lock" \
   git rm -q --cached nvim/.config/nvim/lazy-lock.json
 

@@ -235,6 +235,39 @@ else
   bad "terminal-features lacks usstyle — nvim's diagnostic undercurls are stripped"
 fi
 
+# Restore must not sit where a held Ctrl puts it, and the key it moved to has to
+# be a key the terminal can actually send.
+#
+# The prefix is C-a. Holding Ctrl through the next keystroke turns `prefix r`
+# (rename-window) into `prefix C-r`, which is resurrect's DEFAULT restore key —
+# so leaving @resurrect-restore unset means an accidental full session restore
+# while renaming a window. That is the defect this asserts against.
+#
+# The second half is the one that would rot silently. C-S-r and C-r are the same
+# byte in a traditional terminal; they are only distinct when tmux asks for
+# CSI-u reporting (extended-keys) AND believes the terminal can do it (the
+# extkeys terminal-feature). Drop either and the binding still READS correct
+# while becoming unreachable — the config would claim a key that cannot be
+# pressed. So any Shift-bearing restore key requires both.
+restore_key="$(tmux_setting '@resurrect-restore')"
+ext_on="$(grep -cE '^[[:space:]]*set -s[g]? extended-keys on' "$TMUXCONF")"
+ext_feat="$(grep -cE '^[[:space:]]*set -sa terminal-features .*extkeys' "$TMUXCONF")"
+needs_ext=no
+case "$restore_key" in
+  *-S-*) needs_ext=yes ;;
+esac
+if [ -z "$restore_key" ]; then
+  bad "tmux.conf never sets @resurrect-restore, so restore keeps resurrect's C-r default — one held Ctrl away from 'prefix r' (rename-window)"
+elif [ "$restore_key" = "C-r" ]; then
+  bad "@resurrect-restore is C-r, which is exactly what a held Ctrl turns 'prefix r' into"
+elif [ "$needs_ext" = yes ] && [ "$ext_on" -eq 0 ]; then
+  bad "@resurrect-restore is '$restore_key', but 'set -s extended-keys on' is missing — without it that is the same byte as the plain-Ctrl key and the binding is unreachable"
+elif [ "$needs_ext" = yes ] && [ "$ext_feat" -eq 0 ]; then
+  bad "@resurrect-restore is '$restore_key', but terminal-features never declares extkeys — tmux will not ask the terminal for the sequence that makes it distinct"
+else
+  ok "restore is bound to '$restore_key', off the held-Ctrl path, with the extended-keys support that makes it a key the terminal can send"
+fi
+
 # Continuum has no timer. It appends `#(continuum_save.sh)` to status-right and
 # relies on tmux running that command every time it draws the status line. So if
 # `set -g status-right` ever moves BELOW the line that runs tpm, it overwrites
