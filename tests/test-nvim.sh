@@ -72,6 +72,165 @@ assert "but most are deferred — an eager everything would be a config bug" \
   [ "${eager:-99}" -lt "${plugin_count:-0}" ]
 
 echo
+echo "== line wrap is on, and stays on, in a file window =="
+# checks/repo.sh reads the wrap line out of options.lua on every commit. This
+# asserts the thing that grep structurally cannot: what a running nvim actually
+# does once the whole config and every installed plugin has had its turn.
+#
+# 'wrap' is window-local (:help 'wrap') and Neovim's default for it is ON, so
+# wrap being off is never an omission — something turned it off. The config
+# loads in an order where every later step can undo an earlier one: options.lua,
+# then lazy, then keymaps.lua, then each plugin's config, then the ftplugins for
+# whatever file you opened. An ftplugin, a FileType autocmd, or one `setlocal
+# nowrap` in a plugin takes wrap off the file in front of you while options.lua
+# still reads "true", and a plugin update does that with no diff in this repo at
+# all — which is the case lazy-lock.json being tracked exists to make visible.
+#
+# Only a FILE window is asserted, deliberately. Telescope's prompt, trouble,
+# which-key, undotree, fugitive's diff panes, gitsigns blame and mason's UI all
+# set nowrap on their own windows on purpose, and so does nvim for :terminal
+# buffers. Asserting wrap in EVERY window would fail for entirely correct
+# reasons.
+#
+# Two probes, because they go wrong for different reasons: the window nvim
+# starts in, which is the config's doing and nothing else's; and a second file
+# of a DIFFERENT filetype opened in the SAME window after things have settled,
+# by which point that filetype's ftplugins and the plugins lazy loads on
+# FileType/BufReadPost have run.
+#
+# The second probe MEASURES rather than reading the option back, because screen
+# lines are the thing actually being complained about: with wrap on, a line
+# three windows wide is drawn on several screen lines; with it off, on exactly
+# one. nvim_win_text_height counts screen lines and is wrap-aware, and its
+# "fill" is subtracted so a virtual line above the text — a diagnostic, a diff
+# filler — cannot make an unwrapped line look wrapped. The line is built from
+# the window's own width rather than written at a fixed length, so the probe
+# does not quietly assert how wide a headless nvim happens to be.
+#
+# What this does NOT cover, said out loud rather than implied by the wait: lazy
+# arms User VeryLazy from a UIEnter autocmd, and --headless attaches no UI, so a
+# plugin deferred to VeryLazy never loads here.
+printf 'A markdown paragraph, the kind of prose that line wrap exists for.\n' >"$SANDBOX/wrap.md"
+out="$(nv "$SANDBOX/start.lua" \
+  'lua print("WRAP_AT_START=" .. tostring(vim.wo.wrap))' \
+  'lua vim.wait(2500)' \
+  "lua vim.cmd.edit(vim.fn.fnameescape('$SANDBOX/wrap.md'))" \
+  'lua vim.wait(1000, function() return vim.bo.filetype ~= "" end, 50)' \
+  'lua print("WRAP_NEXT_FILE=" .. tostring(vim.wo.wrap) .. " FT_NEXT_FILE=" .. vim.bo.filetype)' \
+  'lua local cols = vim.api.nvim_win_get_width(0); local line = string.rep("x", cols * 3); vim.api.nvim_buf_set_lines(0, 0, -1, false, { line }); local h = vim.api.nvim_win_text_height(0, { start_row = 0, end_row = 0 }); print("WRAP_SCREEN_LINES=" .. (h.all - h.fill) .. " WRAP_LINE_COLS=" .. #line .. " WRAP_WIN_COLS=" .. cols)')"
+
+assert "wrap is on in the window nvim starts in" contains "$out" "WRAP_AT_START=true"
+# Without this the measurement below could be reporting on a buffer whose
+# filetype was never detected, which is not the claim being made.
+assert "the second file is the filetype this assertion thinks it is" contains "$out" "FT_NEXT_FILE=markdown"
+assert "wrap is still on after opening the next file in the same window" contains "$out" "WRAP_NEXT_FILE=true"
+
+screen_lines="$(printf '%s' "$out" | sed -n 's/.*WRAP_SCREEN_LINES=\([0-9]*\).*/\1/p')"
+line_cols="$(printf '%s' "$out" | sed -n 's/.*WRAP_LINE_COLS=\([0-9]*\).*/\1/p')"
+win_cols="$(printf '%s' "$out" | sed -n 's/.*WRAP_WIN_COLS=\([0-9]*\).*/\1/p')"
+printf '    %s screen lines for a %s-column line in a %s-column window\n' \
+  "${screen_lines:-0}" "${line_cols:-0}" "${win_cols:-0}"
+# :-0 defaults to the FAILING side: a count that could not be read must not
+# pass.
+assert "a line wider than the window is drawn on more than one screen line" \
+  [ "${screen_lines:-0}" -ge 2 ]
+# The tokens vanish as a set when the lua errors — an nvim older than 0.10,
+# where nvim_win_text_height arrived, would do it — and three FAILs with no
+# reason are hard to read at 2am. Not an assertion; the ones above have already
+# failed.
+if ! contains "$out" "WRAP_SCREEN_LINES="; then
+  printf '      nvim said: %s\n' "$(printf '%s' "$out" | tr '\n' ' ' | cut -c1-200)"
+fi
+
+echo
+echo "== 80 columns is held against the ftplugins that would undo it =="
+# 'wrap' folds at the window edge; 'textwidth' is what keeps a line to 80. The
+# interesting failure is not the option being unset, it is the option being set
+# and then quietly overruled.
+#
+# Neovim's own ftplugins strip 't' from formatoptions — the flag that breaks a
+# line as you type — for lua, sh, yaml, json and vim, and gitcommit sets a
+# textwidth of its own (72). Those first two are the languages this
+# repo is mostly written in, so a plain `vim.opt.textwidth = 80` in options.lua
+# reads correct while doing nothing where it matters most. options.lua answers
+# that with a FileType autocmd that writes after the ftplugins run; this proves
+# the autocmd is still winning, which is a claim about ORDERING that no grep can
+# make.
+#
+# gitcommit is asserted deliberately. Its ftplugin sets 72, the git convention,
+# and this config overrides it to 80 — a decision, not an accident. If that is
+# ever reconsidered, this is the assertion that says so out loud instead of
+# letting commit-message width change quietly.
+#
+# The last probe TYPES rather than reading the option back, because the option
+# is not the behaviour: 't' present with a textwidth of 0, or a formatexpr that
+# swallows the break, would both read fine and wrap nothing.
+cat >"$SANDBOX/tw_probe.lua" <<'LUA'
+local dir = vim.env.TW_DIR
+local out = {}
+local fixtures = {
+  { "fix.lua", "lua" },
+  { "fix.sh", "sh" },
+  { "fix.md", "markdown" },
+  { "COMMIT_EDITMSG", "gitcommit" },
+}
+for _, spec in ipairs(fixtures) do
+  vim.cmd.edit(vim.fn.fnameescape(dir .. "/" .. spec[1]))
+  vim.wait(500, function() return vim.bo.filetype ~= "" end, 25)
+  out[#out + 1] = string.format("TW_%s=%d T_%s=%s", spec[2], vim.bo.textwidth, spec[2],
+    tostring(vim.bo.formatoptions:find("t") ~= nil))
+end
+-- Type 140 columns of ordinary words into a lua buffer — the filetype whose
+-- ftplugin removes 't' — and report what the buffer actually ended up holding.
+local typed = dir .. "/typed.lua"
+vim.fn.writefile({}, typed)
+vim.cmd.edit(vim.fn.fnameescape(typed))
+vim.wait(500, function() return vim.bo.filetype ~= "" end, 25)
+local text = string.rep("word ", 28)
+vim.api.nvim_feedkeys(vim.keycode("i") .. text .. vim.keycode("<Esc>"), "x", false)
+local widest = 0
+local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+for _, l in ipairs(lines) do
+  if #l > widest then
+    widest = #l
+  end
+end
+out[#out + 1] = string.format("TYPED_COLS=%d TYPED_LINES=%d TYPED_WIDEST=%d", #text, #lines, widest)
+print(table.concat(out, " "))
+LUA
+printf 'local x = 1\n' >"$SANDBOX/fix.lua"
+printf '#!/bin/sh\necho hi\n' >"$SANDBOX/fix.sh"
+printf '# Title\n\nprose\n' >"$SANDBOX/fix.md"
+printf 'subject\n\nbody\n' >"$SANDBOX/COMMIT_EDITMSG"
+out="$(TW_DIR="$SANDBOX" nv "$SANDBOX/start.lua" \
+  'lua vim.wait(1500)' \
+  "luafile $SANDBOX/tw_probe.lua")"
+
+assert "textwidth is 80 in lua, whose ftplugin sets none and strips auto-wrap" \
+  contains "$out" "TW_lua=80"
+assert "auto-wrap survives the lua ftplugin that removes it" contains "$out" "T_lua=true"
+assert "textwidth is 80 in sh, the other language this repo is written in" \
+  contains "$out" "TW_sh=80"
+assert "auto-wrap survives the sh ftplugin that removes it" contains "$out" "T_sh=true"
+assert "markdown, where the prose lives, is 80" contains "$out" "TW_markdown=80"
+assert "gitcommit is overridden from its ftplugin's 72 to this config's 80" \
+  contains "$out" "TW_gitcommit=80"
+
+typed_cols="$(printf '%s' "$out" | sed -n 's/.*TYPED_COLS=\([0-9]*\).*/\1/p')"
+typed_lines="$(printf '%s' "$out" | sed -n 's/.*TYPED_LINES=\([0-9]*\).*/\1/p')"
+typed_widest="$(printf '%s' "$out" | sed -n 's/.*TYPED_WIDEST=\([0-9]*\).*/\1/p')"
+printf '    typing %s columns into a lua buffer produced %s line(s), widest %s\n' \
+  "${typed_cols:-0}" "${typed_lines:-0}" "${typed_widest:-0}"
+# Both defaults point at the FAILING side: a figure that could not be read must
+# not pass.
+assert "typing past 80 in a lua buffer actually breaks the line" \
+  [ "${typed_lines:-0}" -ge 2 ]
+assert "and no line it left behind is wider than 80" [ "${typed_widest:-999}" -le 80 ]
+if ! contains "$out" "TYPED_LINES="; then
+  printf '      nvim said: %s\n' "$(printf '%s' "$out" | tr '\n' ' ' | cut -c1-200)"
+fi
+
+echo
 echo "== an LSP client actually attaches to a real file =="
 # vim.wait with a predicate polls rather than sleeping a guess, so this either
 # attaches inside the budget or reports honestly that it did not.

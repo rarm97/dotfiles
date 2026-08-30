@@ -135,6 +135,32 @@ mutate "a deprecated Neovim API is caught" "deprecated" \
 mutate "a plugin file with no lazy spec is caught" "lazy spec" \
   sed -i '' 's/^return {/local _unused = {/' nvim/.config/nvim/lua/rich/plugins/fidget.lua
 
+# The defect this exists for, replayed: 0bdf224 flipped this line inside a
+# commit about LSP errors, trailing space and all.
+mutate "line wrap flipped off is caught" "line wrap is on" \
+  sed -i '' 's/^vim\.opt\.wrap = true$/vim.opt.wrap = false /' nvim/.config/nvim/lua/rich/options.lua
+
+# Set once and unset later: lua's last write wins, so reading options.lua alone
+# would report this as fine.
+mutate "wrap turned off again elsewhere in the lua config is caught" "line wrap is on" \
+  bash -c 'printf "\nvim.wo.wrap = false\n" >> nvim/.config/nvim/lua/rich/keymaps.lua'
+
+# The anti-vacuity guard: a value that cannot be read must fail, not compare
+# equal to the nothing beside it.
+mutate "an unreadable wrap setting fails rather than passing vacuously" "line wrap is on" \
+  sed -i '' '/^vim\.opt\.wrap/d' nvim/.config/nvim/lua/rich/options.lua
+
+mutate "a textwidth that is not 80 is caught" "textwidth is 80" \
+  sed -i '' 's/^vim\.opt\.textwidth = 80$/vim.opt.textwidth = 100/' nvim/.config/nvim/lua/rich/options.lua
+
+# The same last-write-wins shape as the wrap pair: set to 80 here, set to
+# something else further along, and reading options.lua alone reports it fine.
+mutate "textwidth set to something else elsewhere in the lua config is caught" "textwidth is 80" \
+  bash -c 'printf "\nvim.opt_local.textwidth = 0\n" >> nvim/.config/nvim/lua/rich/keymaps.lua'
+
+mutate "an unreadable textwidth fails rather than passing vacuously" "textwidth is 80" \
+  sed -i '' '/^vim\.opt\.textwidth/d' nvim/.config/nvim/lua/rich/options.lua
+
 mutate_machine "a tmux.conf path that does not exist is caught" "every path the configs hardcode" \
   sed -i '' 's|~/.local/bin/tmux-clear-scrollback|~/.local/bin/does-not-exist|' tmux/.config/tmux/tmux.conf
 

@@ -23,6 +23,7 @@ REPO="$PWD"
 GUARD="tmux/.local/bin/tmux-resurrect-guard"
 SAVES="tmux/.local/bin/tmux-resurrect-saves"
 TMUXCONF="tmux/.config/tmux/tmux.conf"
+OPTIONS="nvim/.config/nvim/lua/rich/options.lua"
 
 # The value tmux.conf sets an option to:  set -g @option 'value'
 tmux_setting() { # $1 = option name
@@ -78,6 +79,15 @@ guard_doc_default() { # $1 = option name
       printf '%s' "${line%%\)*}"
       ;;
   esac
+}
+
+# The value options.lua assigns an option:  vim.opt.NAME = VALUE  -- comment
+nvim_opt() { # $1 = option name
+  local line
+  line="$(grep -m1 -E "^[[:space:]]*vim\.opt\.$1[[:space:]]*=" "$OPTIONS")"
+  line="${line#*=}"
+  line="${line%%--*}"
+  printf '%s' "$(printf '%s' "$line" | tr -d '[:space:]')"
 }
 
 section "Lua config"
@@ -148,6 +158,71 @@ if git ls-files --error-unmatch nvim/.config/nvim/lazy-lock.json >/dev/null 2>&1
   ok "lazy-lock.json is tracked — plugin versions are reproducible"
 else
   bad "lazy-lock.json is not tracked — a fresh machine gets whatever is newest that day"
+fi
+
+# Line wrap, and which way round it has to point.
+#
+# This is the one option in options.lua whose value has already been changed by
+# a commit about something else. It went in as true; commit 0bdf224 — "Resolved
+# LSP errors and hardened colorscheme.lua" — left it false, with a trailing
+# space, in a diff nobody was reading for this. Nothing said a word: the file
+# still parses, nvim still starts, every other check here stays green, and the
+# only symptom is long lines running off the right of the screen, which reads as
+# a preference rather than a regression.
+#
+# TWO halves, because setting an option is not the same as it being set. Lua's
+# last write wins, so wrap = true at the top of options.lua and a wo.wrap =
+# false in an autocmd further down would leave wrap off with this file still
+# claiming otherwise. The second grep looks for anything that turns it off again
+# ANYWHERE under nvim/.config/nvim -- a directory walk, not `git ls-files`, so
+# it also sees untracked lua there and does not see wezterm's. Comment lines are
+# dropped so that a lua comment quoting the pattern cannot trip it. What neither
+# half can see is an
+# installed plugin doing it at runtime — that needs a running nvim, and
+# tests/test-nvim.sh is where that assertion lives.
+wrap="$(nvim_opt wrap)"
+nowrap="$(grep -rInE 'vim\.(opt|o|wo|go|opt_local)\.wrap[[:space:]]*=[[:space:]]*false|(set|setlocal)[[:space:]]+nowrap' \
+  nvim/.config/nvim --include='*.lua' | grep -vE '^[^:]*:[0-9]+:[[:space:]]*--')"
+if [ -z "$wrap" ]; then
+  bad "could not read vim.opt.wrap out of $OPTIONS at all — the comparison would be vacuous"
+elif [ "$wrap" != "true" ]; then
+  bad "$OPTIONS sets wrap = $wrap, so long lines run off the right of the screen instead of wrapping"
+elif [ -n "$nowrap" ]; then
+  bad "options.lua sets wrap = true and the lua config turns it off again — the later write is the one that counts:"
+  printf '%s\n' "$nowrap" | sed 's/^/      /'
+else
+  ok "line wrap is on in options.lua and nothing in the lua config turns it off again"
+fi
+
+# Hard wrap at 80, and the fact that setting it is not the same as getting it.
+#
+# 'wrap' folds at the window edge; 'textwidth' is what holds a line to 80. The
+# value is static and belongs here, but the load-bearing half of that setting is
+# NOT static and cannot be checked here at all: Neovim's own ftplugins strip 't'
+# from formatoptions for lua and sh, and gitcommit sets textwidth=72, so a bare
+# assignment in options.lua reads correct while doing nothing in the two
+# languages this repo is mostly written in. options.lua answers that with a
+# FileType autocmd that writes after them, and tests/test-nvim.sh proves the
+# ordering by typing 140 columns into a lua buffer and counting what comes out.
+#
+# What this half does catch is the value being changed, and the value being
+# changed BACK somewhere else in the lua: the second grep allows an assignment
+# of 80 and reports any other number, which is what a stray `textwidth = 0` in
+# a plugin config or an autocmd would be.
+textwidth="$(nvim_opt textwidth)"
+othertw="$(grep -rInE 'vim\.(opt|o|bo|wo|opt_local)\.textwidth[[:space:]]*=' \
+  nvim/.config/nvim --include='*.lua' |
+  grep -vE '^[^:]*:[0-9]+:[[:space:]]*--' |
+  grep -vE '=[[:space:]]*80[[:space:]]*$')"
+if [ -z "$textwidth" ]; then
+  bad "could not read vim.opt.textwidth out of $OPTIONS at all — the comparison would be vacuous"
+elif [ "$textwidth" != "80" ]; then
+  bad "$OPTIONS sets textwidth = $textwidth, not 80, so prose stops wrapping where this repo writes it"
+elif [ -n "$othertw" ]; then
+  bad "options.lua sets textwidth = 80 and the lua config sets it to something else — the later write wins:"
+  printf '%s\n' "$othertw" | sed 's/^/      /'
+else
+  ok "textwidth is 80 in options.lua and nothing in the lua config sets it to anything else"
 fi
 
 section "tmux config"
