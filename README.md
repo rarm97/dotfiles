@@ -4,15 +4,15 @@ Personal development environment managed with [GNU Stow](https://www.gnu.org/sof
 
 ## What's included
 
-| Package | What it does |
-|---------|-------------|
-| **nvim** | Neovim config — LSP, Treesitter, Telescope, Harpoon, Git integration, completions, ThePrimeagen's 99 AI plugin |
-| **tmux** | Window-focused workflow with vim-style navigation, session persistence via resurrect/continuum |
-| **wezterm** | Terminal emulator — auto-attaches to tmux, Rosé Pine Moon theme, JetBrainsMono Nerd Font |
-| **zsh** | Shell config — lazy NVM, cached completions, fzf integration, autosuggestions, syntax highlighting |
+| Package      | What it does                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| **nvim**     | Neovim config — LSP, Treesitter, Telescope, Harpoon, Git integration, completions, ThePrimeagen's 99 AI plugin      |
+| **tmux**     | Window-focused workflow with vim-style navigation, session persistence via resurrect/continuum                      |
+| **wezterm**  | Terminal emulator — auto-attaches to tmux, Rosé Pine Moon theme, JetBrainsMono Nerd Font                            |
+| **zsh**      | Shell config — lazy NVM, cached completions, fzf integration, autosuggestions, syntax highlighting                  |
 | **starship** | Minimal prompt — directory, git branch, git status, and python, nodejs, rust, golang, cmd duration where they apply |
-| **git** | Global git config and ignores |
-| **home** | Global formatter configs (.prettierrc, .stylua.toml, .clang-format) |
+| **git**      | Global git config and ignores                                                                                       |
+| **home**     | Global formatter configs (.prettierrc, .stylua.toml, .clang-format)                                                 |
 
 ## Setup
 
@@ -28,20 +28,20 @@ make stow
 
 Prefix is `Ctrl-a`.
 
-| Binding | Action |
-|---------|--------|
-| `h` / `l` | Previous / next window |
-| `j` / `k` | Next / previous session |
-| `c` | New window |
-| `q` | Kill window (with confirmation) |
-| `Q` | Kill session (smart — won't close WezTerm) |
-| `r` / `R` | Rename window / session |
-| `s` | Save session (resurrect) |
-| `M-s` | Save session, bypassing the degenerate-state guard |
-| `S` | Source tmux.conf |
-| `f` | Sessionizer popup |
-| `w` | Session/window tree overview |
-| `Backspace` | Clear screen and scrollback |
+| Binding     | Action                                             |
+| ----------- | -------------------------------------------------- |
+| `h` / `l`   | Previous / next window                             |
+| `j` / `k`   | Next / previous session                            |
+| `c`         | New window                                         |
+| `q`         | Kill window (with confirmation)                    |
+| `Q`         | Kill session (smart — won't close WezTerm)         |
+| `r` / `R`   | Rename window / session                            |
+| `s`         | Save session (resurrect)                           |
+| `M-s`       | Save session, bypassing the degenerate-state guard |
+| `S`         | Source tmux.conf                                   |
+| `f`         | Sessionizer popup                                  |
+| `w`         | Session/window tree overview                       |
+| `Backspace` | Clear screen and scrollback                        |
 
 ## Session persistence
 
@@ -82,19 +82,19 @@ never deleted.
 
 Leader is `Space`.
 
-| Binding | Action |
-|---------|--------|
-| `<leader>ff` | Find files |
-| `<leader>fg` | Live grep |
-| `<leader>gs` | Git status (Fugitive) |
-| `<leader>ca` | Code action |
-| `<leader>rn` | Rename symbol |
-| `gd` | Go to definition |
-| `gr` | References |
-| `]q` / `[q` | Next / prev quickfix item |
+| Binding      | Action                       |
+| ------------ | ---------------------------- |
+| `<leader>ff` | Find files                   |
+| `<leader>fg` | Live grep                    |
+| `<leader>gs` | Git status (Fugitive)        |
+| `<leader>ca` | Code action                  |
+| `<leader>rn` | Rename symbol                |
+| `gd`         | Go to definition             |
+| `gr`         | References                   |
+| `]q` / `[q`  | Next / prev quickfix item    |
 | `<leader>lq` | Send diagnostics to quickfix |
-| `<leader>9s` | 99 AI search |
-| `<leader>9v` | 99 AI visual replace |
+| `<leader>9s` | 99 AI search                 |
+| `<leader>9v` | 99 AI visual replace         |
 
 ## Make targets
 
@@ -123,10 +123,10 @@ finished.**
 
 `check` is split in two, and the split matters:
 
-| | |
-|---|---|
-| `checks/repo.sh` | Is the *repository* internally consistent? Holds on any machine with git and the usual text tools, so CI runs it. |
-| `checks/machine.sh` | Is *this machine* set up the way the repo assumes? Needs WezTerm, fonts, a stow tree and a git identity — none of which a CI runner has. |
+|                     |                                                                                                                                          |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `checks/repo.sh`    | Is the _repository_ internally consistent? Holds on any machine with git and the usual text tools, so CI runs it.                        |
+| `checks/machine.sh` | Is _this machine_ set up the way the repo assumes? Needs WezTerm, fonts, a stow tree and a git identity — none of which a CI runner has. |
 
 A check that cannot pass in CI ends up disabled, and a disabled check is worse
 than no check because it still looks like coverage.

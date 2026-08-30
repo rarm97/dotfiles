@@ -292,8 +292,14 @@ mutate "a leader mapping the README documents but nothing asserts is caught" "de
   sed -i '' 's/`<leader>ff`/`<leader>zz`/' README.md
 
 # shellcheck disable=SC2016  # backticks are markdown, not substitution
+# The pattern tolerates the padding a markdown formatter adds. It was written
+# with single spaces, and prettier — which this repo runs on save for markdown —
+# pads table cells to align them, after which the sed matched nothing, applied
+# no defect, and this mutation reported that check.sh had failed to catch a
+# defect that was never introduced. mutate() runs the command with output
+# discarded and cannot tell "the sed did nothing" from "the check did nothing".
 mutate "a Neovim binding the README documents but the lua config lacks is caught" "describes nothing that is not here" \
-  sed -i '' 's/| `gd` |/| `gz` |/' README.md
+  sed -i '' -E 's/\| `gd`([[:space:]]*)\|/| `gz`\1|/' README.md
 
 # shellcheck disable=SC2016  # the $names are starship modules, not variables
 mutate "a prompt module the README's row does not mention is caught" "describes nothing that is not here" \
