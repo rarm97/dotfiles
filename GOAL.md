@@ -101,6 +101,67 @@ reads as though it should work.
 `enable` ⊇ `ensure_installed` is the rule and `rust_analyzer` is the one
 deliberate extra. An exception needs a reason recorded next to it, not a name.
 
+## 4. The mutation harness cannot tell a working check from a dead one
+
+`tests/test-check.sh` exists to prove every assertion in `checks/` can fail. It
+does not currently prove that. Its verdict, at `tests/test-check.sh:97`, is:
+
+    # The assertion must now report a failure mentioning its subject.
+    if contains "$after" "✗"; then
+      ok "$desc"
+
+The comment says "mentioning its subject". The code looks for the glyph anywhere
+in check.sh's output. `$marker` is read exactly once, at line 82, against the
+BASELINE — before the mutation is applied. After the defect is introduced it is
+never consulted again, so any failure anywhere satisfies the verdict.
+
+Deleting an assertion IS caught: its marker vanishes from the baseline and
+`_mutate` says so. The hole is an assertion that stays green and goes blind.
+
+Demonstrated, not argued. Replace the `deprecated=` regex at
+`checks/repo.sh:137` with one that matches nothing, leaving its message alone:
+
+    ✓ no deprecated Neovim APIs in the lua config     (matches nothing)
+    PASS  a deprecated Neovim API is caught           (its own mutation)
+    77 passed, 0 failed
+
+It survives because that mutation appends after `fidget.lua`'s top-level
+`return {`, which is also a syntax error, so "every lua file parses" fires and
+the verdict accepts that instead.
+
+Measured across all of them, by dumping the actual ✗ lines per mutation:
+
+| | |
+| --- | --- |
+| mutation verdicts | 59 |
+| produced exactly one ✗ | 47 |
+| produced more than one ✗ | 12 |
+| of those 12, marker present in the failure text | 1 |
+| can pass with the assertion they name fully blind | 11 |
+| markers appearing in failure text at all | 12 of 59 |
+
+The two twelves are near-disjoint; they overlap by one. The 47 are safe only by
+accident — nothing enforces one failure per mutation, so any new check that also
+trips on an existing mutation's defect quietly demotes it into the vulnerable
+group. That ratchet runs the wrong way in a repo that keeps adding checks: three
+went in this week.
+
+Say the awkward part out loud rather than discovering it halfway. The obvious
+fix — require the marker on the ✗ line — works for 12 of 59. The other 47 take
+their marker from the ✓ wording while the ✗ is worded differently (`ok "line
+wrap is on..."` against `bad "$OPTIONS sets wrap = false..."`). `bad()` prints
+glyph and message on one line (`checks/lib.sh:13`), so a line-level verdict is
+mechanically possible; it is a wording job, not a plumbing one. Either pair the
+wordings or give `mutate` a second, explicit failure marker.
+
+One more thing this harness cannot see, found the hard way: `mutate` runs its
+command with output discarded and does not care whether it changed a byte. A
+`sed` whose pattern stopped matching applies no defect, and the mutation then
+reports that check.sh failed to catch a defect that was never introduced. That
+happened here when a formatter padded the README's tables, and it is why the
+`gd` pattern now tolerates whitespace. A mutation that changes nothing should
+say so.
+
 ## Also worth doing, cheaply
 
 Thirteen comparisons in `tests/` default a value that could not be read,
@@ -146,5 +207,6 @@ whether an assertion fails safe or fails open, and that is greppable.
 
 The three branches are driven and asserted rather than merely present, a
 silently skipped shell plugin says something, the two server lists cannot
-disagree without a recorded reason, and whatever is left deliberately uncovered
-says why. Working tree clean, CI green.
+disagree without a recorded reason, no mutation passes while the assertion it
+names is blind, a mutation that changes nothing says so, and whatever is left
+deliberately uncovered says why. Working tree clean, CI green.
