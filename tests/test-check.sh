@@ -54,19 +54,62 @@ run_check_full() { (cd "$WORK" && ./check.sh 2>&1); }
 mutate() { # $1=description  $2=marker text of the assertion  $3...=command to apply the mutation
   local desc="$1" marker="$2"
   shift 2
-  _mutate repo "$desc" "$marker" "$@"
+  _mutate repo "$desc" "$marker" "" "$@"
 }
 
 # Same, but for an assertion that lives in checks/machine.sh.
 mutate_machine() {
   local desc="$1" marker="$2"
   shift 2
-  _mutate machine "$desc" "$marker" "$@"
+  _mutate machine "$desc" "$marker" "" "$@"
 }
 
-_mutate() { # $1=repo|machine  $2=description  $3=marker  $4...=mutation
-  local mode="$1" desc="$2" marker="$3"
+# For a mutation that ADDS a failing item to a list rather than turning one of
+# the list's existing passes red.
+#
+# The default verdict is "fewer passing lines carry the marker than before",
+# which needs nothing written twice and no call site changed. It cannot see an
+# additive defect: appending `.PHONY: ghost` to the Makefile leaves all 13
+# "make X has a recipe" lines green and adds a fourteenth entry that fails, so
+# the count is 13 both times while the assertion did exactly its job. One
+# mutation here is that shape, so it — and only it — names the failure text.
+mutate_adds() { # $1=description  $2=marker  $3=failure text  $4...=command
+  local desc="$1" marker="$2" failtext="$3"
   shift 3
+  _mutate repo "$desc" "$marker" "$failtext" "$@"
+}
+
+# How many PASSING lines carry an assertion's marker. The marker names an
+# assertion that is green in the baseline, so this is the number that has to go
+# DOWN once the defect is introduced.
+#
+# A count rather than a presence test, because two markers are deliberately
+# shared: "has a recipe" is one assertion per make target, and "runs exactly
+# what" covers both git hooks. Breaking one recipe leaves the others green, so
+# "is the marker still on a passing line" would report a working assertion as
+# broken. Counting says 13 became 12, which is the claim actually being made.
+green_hits() { # $1 = check.sh output, $2 = marker
+  local n
+  n="$(printf '%s\n' "$1" | grep '✓' | grep -cF -- "$2" || true)"
+  case "$n" in '' | *[!0-9]*) n=0 ;; esac
+  printf '%s' "$n"
+}
+
+# Everything a mutation could plausibly change, as one string. Two mutations
+# change only git config — core.hooksPath and user.email — and would be
+# invisible to `git status` on its own, so the local config is part of the
+# state.
+work_state() {
+  (
+    cd "$WORK" || return 0
+    git status --porcelain
+    git config --local --list
+  ) 2>/dev/null
+}
+
+_mutate() { # $1=repo|machine  $2=desc  $3=marker  $4=failure text or ""  $5...=mutation
+  local mode="$1" desc="$2" marker="$3" failtext="$4"
+  shift 4
   reset_repo
   local before after
   if [ "$mode" = machine ]; then
@@ -79,25 +122,66 @@ _mutate() { # $1=repo|machine  $2=description  $3=marker  $4...=mutation
   # git identity — a CI runner, for instance — and skipping is honest. A REPO
   # assertion holds everywhere, so if its marker is gone it has been renamed or
   # deleted and the mutation would pass vacuously.
-  if ! contains "$before" "$marker"; then
+  local before_hits
+  before_hits="$(green_hits "$before" "$marker")"
+  if [ "$before_hits" -eq 0 ]; then
     if [ "$mode" = machine ]; then
       printf '  \033[33mSKIP\033[0m  %s (not asserted on this machine)\n' "$desc"
     else
-      no "$desc — baseline does not contain '$marker' (the assertion may have been renamed)"
+      no "$desc — no passing line carries '$marker' (renamed, or already failing)"
     fi
     return
   fi
+  # Prove the mutation did something. The command runs with its output
+  # discarded, so a sed whose pattern has stopped matching applies no defect at
+  # all and the verdict below would be judging an unmutated copy. Not
+  # hypothetical: prettier padded the README's table cells, a sed written with
+  # single spaces then matched nothing, and this suite reported that check.sh
+  # had failed to catch a defect nobody had introduced.
+  local state_before state_after
+  state_before="$(work_state)"
   (cd "$WORK" && "$@") >/dev/null 2>&1
+  state_after="$(work_state)"
+  if [ "$state_before" = "$state_after" ]; then
+    no "$desc — the mutation changed nothing, so nothing was tested"
+    return
+  fi
   if [ "$mode" = machine ]; then
     after="$(run_check_full)"
   else
     after="$(run_check)"
   fi
-  # The assertion must now report a failure mentioning its subject.
-  if contains "$after" "✗"; then
+  # The assertion this mutation NAMES must have stopped passing.
+  #
+  # Looking for the failure glyph anywhere, which is what this did, accepts any
+  # failure at all — so a mutation whose own check has gone blind still reported
+  # PASS whenever something else tripped on the same defect. Demonstrated rather
+  # than supposed: blank the deprecated= regex in checks/repo.sh and "a
+  # deprecated Neovim API is caught" stayed green, because appending after a
+  # top-level `return {` is also a lua syntax error and the parse check fired in
+  # its place.
+  #
+  # Neither obvious fix was needed. Requiring the marker on the failure line
+  # only works where the passing and failing wordings share it, which is 12 of
+  # 59; giving every call a second failure marker means editing every call site
+  # and leaves the two strings free to drift apart. The marker already names an
+  # assertion that is GREEN in the baseline, so the question needing no new
+  # information is whether it is still green now.
+  local after_hits red
+  after_hits="$(green_hits "$after" "$marker")"
+  red="$(printf '%s\n' "$after" | grep '✗' || true)"
+  if [ -n "$failtext" ]; then
+    if contains "$red" "$failtext"; then
+      ok "$desc"
+    else
+      no "$desc — nothing failed with '$failtext', so the assertion it names never fired"
+    fi
+  elif [ "$after_hits" -ge "$before_hits" ]; then
+    no "$desc — '$marker' still passes ($after_hits of $before_hits), so the assertion it names never fired"
+  elif [ -n "$red" ]; then
     ok "$desc"
   else
-    no "$desc — check.sh still reported everything green after the defect was introduced"
+    no "$desc — '$marker' stopped passing but nothing reported a failure"
   fi
 }
 
@@ -247,7 +331,8 @@ mutate "a copy in a test suite disagreeing is caught too" "copies of the stow pa
 
 # make accepts any number of .PHONY lines; reading only the first left
 # everything on a second one unchecked.
-mutate "a recipeless target on a SECOND .PHONY line is caught" "has a recipe" \
+mutate_adds "a recipeless target on a SECOND .PHONY line is caught" "has a recipe" \
+  "declared .PHONY but has no recipe" \
   bash -c 'printf "\n.PHONY: ghost\n" >> Makefile'
 
 # ------------------------------------------- constants written down more than once
